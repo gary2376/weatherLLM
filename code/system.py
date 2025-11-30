@@ -6,7 +6,6 @@ except Exception:
     OpenAI = None
     HAS_OPENAI_NEW = False
 import os
-import sqlite3
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -58,12 +57,7 @@ env_openai_key = os.getenv("OPENAI_API_KEY")
 if env_openai_key:
     openai.api_key = env_openai_key
 
-# 是否使用本機資料（DB / radar XML / Excel）。預設使用本機資料，但在要上傳到 GitHub
-# 或執行於不能依賴本機檔案的環境時，可設定環境變數 USE_LOCAL_DATA=0
-USE_LOCAL_DATA = os.getenv("USE_LOCAL_DATA", "1") != "0"
-
-# SQLite 資料庫路徑
-DATABASE_NAME = r"E:\python_project\contest\TGIS\DB\taichung_weather.db"
+# （已移除本機 SQLite DB 支援，改以 Open‑Meteo 作為唯一資料來源）
 
 # 自訂區域 ID ↔ 區域名稱 對應表
 CUSTOM_ID_TO_NAME_MAP = {
@@ -402,34 +396,14 @@ def fetch_radar_data(district_id: int, limit: int = 5) -> str:
     """
     查詢指定 district_id 的即時雷達回波資料，取最新 limit 筆，並回傳成文字。
     """
+    # 移除本機 DB 存取：直接使用 Open‑Meteo 的降水摘要作為雷達/降雨資料來源
     try:
-        conn = sqlite3.connect(DATABASE_NAME)
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT timestamp_utc, dbz_value
-            FROM realtime_observations
-            WHERE custom_district_id = ?
-            ORDER BY timestamp_utc DESC
-            LIMIT ?
-            """,
-            (district_id, limit)
-        )
-        rows = cursor.fetchall()
-        conn.close()
-
-        if not rows:
-            # 若本機 DB 中無即時雷達資料，改為使用遠端降水量作為替代 (Open-Meteo)
-            area_name = CUSTOM_ID_TO_NAME_MAP.get(district_id)
-            return fetch_precipitation_open_meteo(area=area_name)
-
-        result = f"📡 雷達回波 - {CUSTOM_ID_TO_NAME_MAP[district_id]}：\n"
-        for t, dbz in rows:
-            result += f"  - 時間: {t}, dBZ 值: {dbz if dbz is not None else 'N/A'}\n"
-        return result
-
+        area_name = CUSTOM_ID_TO_NAME_MAP.get(district_id)
+        header = f"📡 使用 Open‑Meteo 取得 {area_name or '指定區域'} 的近期降水摘要（不使用本機 DB）：\n"
+        body = fetch_precipitation_open_meteo(area=area_name)
+        return header + body
     except Exception as e:
-        return _make_safe(f"{ERROR_PREFIX} 雷達資料查詢錯誤：{e}")
+        return _make_safe(f"{ERROR_PREFIX} 雷達資料查詢錯誤（Open‑Meteo）：{e}")
 
 
 def get_latest_radar_summary(radar_dir: str = r"E:\python_project\contest\TGIS\radar") -> str:
@@ -440,7 +414,7 @@ def get_latest_radar_summary(radar_dir: str = r"E:\python_project\contest\TGIS\r
     # 如果環境設定關閉本機資料，或 radar 目錄不存在／找不到檔案，改用遠端即時降水資料作為替代
     try:
         p = Path(radar_dir)
-        if p.exists() and USE_LOCAL_DATA:
+        if p.exists():
             xml_files = sorted(p.glob('*.xml'), key=lambda x: x.stat().st_mtime, reverse=True)
             if xml_files:
                 newest = xml_files[0]
@@ -540,61 +514,12 @@ def fetch_forecast_data(
     若提供 target_hour (如 "06:00" 或 "18:00")，再依小時過濾，最後回傳文字結果。
     """
     try:
-        # 把 target_date 轉成兩個 UTC 邊界（00:00 到隔天 00:00）
-        start_utc = datetime(
-            target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc
-        )
-        end_utc = start_utc + timedelta(days=1)
-
-        conn = sqlite3.connect(DATABASE_NAME)
-        cursor = conn.cursor()
-
-        sql = """
-            SELECT *
-            FROM weekly_forecasts
-            WHERE custom_district_id = ?
-              AND forecast_period_start_utc >= ?
-              AND forecast_period_start_utc < ?
-        """
-        params = [
-            district_id,
-            start_utc.strftime('%Y-%m-%d %H:%M:%S'),
-            end_utc.strftime('%Y-%m-%d %H:%M:%S')
-        ]
-
-        if target_hour:
-            sql += " AND strftime('%H:%M', forecast_period_start_utc) = ?"
-            params.append(target_hour)
-
-        sql += " ORDER BY forecast_period_start_utc ASC LIMIT ?"
-        params.append(limit)
-
-        cursor.execute(sql, tuple(params))
-        rows = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]
-        conn.close()
-
-        if not rows:
-            # 若本機 DB 中沒有該區的預報資料，直接使用 Open-Meteo 作為後備（不管 DB 檔案是否存在）
-            try:
-                area_name = CUSTOM_ID_TO_NAME_MAP.get(district_id)
-                lat, lon = AREA_COORDS.get(area_name, AREA_COORDS.get("台中市"))
-                return fetch_forecast_open_meteo(lat, lon, target_date, target_hour)
-            except Exception:
-                return _make_safe(
-                    f"{WARN_PREFIX} 沒有查到 {CUSTOM_ID_TO_NAME_MAP[district_id]} {target_hour or ''} 的 "
-                    f"{target_date.strftime('%m月%d日')} 預報資料"
-                )
-
-        result = f"🌤️ {CUSTOM_ID_TO_NAME_MAP[district_id]} {target_hour or ''} 天氣預報（{target_date.strftime('%m月%d日')}）：\n"
-        for row in rows:
-            result += "=============================\n"
-            for col, val in zip(column_names, row):
-                result += f"{col}: {val}\n"
-        return result
-
+        # 直接使用 Open‑Meteo 取得該日預報（不再依賴本機 DB）
+        area_name = CUSTOM_ID_TO_NAME_MAP.get(district_id)
+        lat, lon = AREA_COORDS.get(area_name, AREA_COORDS.get("台中市"))
+        return fetch_forecast_open_meteo(lat, lon, target_date, target_hour)
     except Exception as e:
-        return _make_safe(f"{ERROR_PREFIX} 預報資料查詢錯誤：{e}")
+        return _make_safe(f"{ERROR_PREFIX} 預報資料查詢錯誤（Open‑Meteo）：{e}")
 
 
 def fetch_forecast_open_meteo(lat: float, lon: float, target_date: datetime, target_hour: Optional[str] = None) -> str:
