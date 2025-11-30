@@ -322,20 +322,15 @@ class WeatherChatbot:
         return list(set(rel_cctvs))[:8]
 
 def initialize_session_state():
-    cctv_path = '../Data/cctv_enhanced.csv'
-    attraction_path = '../Data/location_consolidated_enhanced.xlsx'
+    # 計算 Data 目錄：使用 repo 相對路徑 Data/
+    try:
+        project_root = Path(__file__).resolve().parents[1]
+    except Exception:
+        project_root = Path.cwd()
+    data_dir = project_root / 'Data'
 
-    # 若找不到資料檔，CCTVManager / AttractionManager 會在內部處理並顯示錯誤訊息；在此顯示簡短提示但不依賴側欄輸入
-    if not cctv_path.exists():
-        try:
-            st.warning(f"找不到 CCTV 資料: {cctv_path}. 若需要 CCTV 功能，請將檔案放在該路徑 (repo 的 Data/)。")
-        except Exception:
-            pass
-    if not attraction_path.exists():
-        try:
-            st.warning(f"找不到景點 Excel 檔案: {attraction_path}. 若需要景點功能，請將檔案放在該路徑 (repo 的 Data/)。")
-        except Exception:
-            pass
+    cctv_path = str(data_dir / 'cctv_enhanced.csv')
+    attraction_path = str(data_dir / 'location_consolidated_enhanced.xlsx')
 
     if 'cctv_manager' not in st.session_state:
         st.session_state.cctv_manager = CCTVManager(str(cctv_path))
