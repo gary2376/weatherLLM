@@ -1,0 +1,93 @@
+/* Minimal professional styles for the Streamlit app */
+:root{
+  --accent: #1f4e79;
+  --accent-2: #4a90e2;
+  --muted: #6b7280;
+  --bg: #ffffff;
+  --card-bg: #fbfdff;
+  --radius: 8px;
+  --max-width: 1100px;
+  --font-sans: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Layout */
+.main .block-container{
+  padding-top: 2.5rem;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Page title */
+.main h1{
+  color: var(--accent);
+  text-align: center;
+  font-weight: 700;
+  border-bottom: 3px solid var(--accent-2);
+  padding-bottom: 0.8rem;
+  margin-bottom: 1.25rem;
+  font-family: var(--font-sans);
+}
+
+/* Headings inside app */
+h2, h3, h4{
+  color: #153152;
+  font-family: var(--font-sans);
+}
+
+/* Chat container & messages (generic) */
+.stChatMessage, .stMarkdown{
+  font-family: var(--font-sans);
+  color: #0f172a;
+}
+
+/* Buttons */
+.stButton > button{
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  color: #fff;
+  border-radius: 6px;
+  border: none;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+}
+.stButton > button:hover{
+  filter: brightness(0.95);
+}
+
+/* Panels / cards */
+.block-container .stExpander{
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 6px rgba(16,24,40,0.06);
+}
+
+/* Warnings & info */
+.stAlert, .stWarning, .stInfo{
+  border-radius: 6px;
+}
+
+/* Map styling: target common container classes used by folium/streamlit-folium */
+.leaflet-container, .folium-map {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(16,24,40,0.08);
+  border: 1px solid rgba(15,23,42,0.04);
+}
+
+/* Table styling */
+.stDataFrame table {
+  font-family: var(--font-sans);
+}
+
+/* Footer / small text */
+small, .caption {
+  color: var(--muted);
+}
+
+/* Keep overall whitespace tidy */
+div.row-widget.stRadio, div.row-widget.stCheckbox {
+  margin-top: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Make links a pleasant blue */
+a { color: var(--accent-2); }

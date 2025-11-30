@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environment
+.venv/
+venv/
+.env/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Data / large files (do NOT commit large data to the repo)
+Data/
+DB/
+File/
+radar/
+weather_json/
+*.db
+*.sqlite3
+*.csv
+*.xml
+*.shp
+*.shx
+*.xlsx
+*.xls
+
+# logs
+*.log
+
+# byte-compiled / build
+build/
+dist/
+
+# other
+*.pyc
