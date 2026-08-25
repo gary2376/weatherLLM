@@ -7,7 +7,10 @@ on:
     branches: [ main ]
 
 jobs:
-  syntax-check:
+  # deterministic 層：不打 LLM、不需要 Data/travel.db（gitignore掉的真實資料，
+  # checkout不會有）。需要真的呼叫 OpenAI 的 live eval 在 nightly-eval.yml，
+  # 手動/排程觸發，不塞進這裡——見 ROADMAP.md Phase 5「eval分兩層」決策。
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -18,7 +21,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    - name: Check Python syntax (quick)
+        pip install -r requirements-dev.txt
+    - name: Check Python syntax
       run: |
-        python -m py_compile code/*.py || true
+        python -m py_compile code/*.py collector/*.py eval/*.py tests/*.py
+    - name: Run deterministic tests
+      run: |
+        python -m pytest tests/ -v

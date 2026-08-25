@@ -8,3 +8,9 @@ openpyxl
 requests
 openai
 python-dotenv
+chromadb
+fastembed
+rank_bm25
+jieba
+langfuse
+langgraph

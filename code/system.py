@@ -1,3 +1,17 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# .env 沒被載入過的話 os.getenv(...) 永遠讀不到值——collector/ 底下每支腳本都有呼叫
+# 這個，但 system.py 之前沒有，等於 .env 這條路徑對主程式從沒真的生效過，只有靠
+# Streamlit 側欄手動貼 key 才動得了。load_dotenv() 放在檔案最前面，比 openai/Langfuse
+# 的 client 初始化更早跑，兩邊才都讀得到 .env 裡的 key。明確指定路徑（跟專案裡
+# `DB_PATH`/`CHROMA_PATH` 同樣用 `Path(__file__)` 定位），不依賴呼叫端的當前工作
+# 目錄——不然從專案外的目錄執行時，預設的 CWD-relative 搜尋會找不到 .env。
+# 找不到 .env 檔不會報錯，已經是環境變數（例如部署環境用 st.secrets 橋接過來）的話
+# 這行也不會覆蓋掉。
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+
 import openai
 try:
     from openai import OpenAI
@@ -5,18 +19,59 @@ try:
 except Exception:
     OpenAI = None
     HAS_OPENAI_NEW = False
-import os
+
+# Langfuse 版的 OpenAI client 是完全相容的 drop-in 替換：換了 import 就自動幫每次
+# chat.completions.create() 呼叫記錄 prompt/response/latency/token，不用手動包一層
+# span。沒設定 LANGFUSE_PUBLIC_KEY/SECRET_KEY 或套件沒裝時優雅退回原生
+# openai.OpenAI，不影響核心天氣查詢功能——Langfuse 純粹是可觀測性，不是天氣查詢的
+# 必要依賴。
+LANGFUSE_TRACING = False
+if HAS_OPENAI_NEW and os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
+    try:
+        from langfuse.openai import OpenAI as OpenAI  # noqa: F811
+        LANGFUSE_TRACING = True
+    except Exception:
+        pass
+
+if LANGFUSE_TRACING:
+    from langfuse import observe
+else:
+    def observe(*_args, **_kwargs):
+        """Langfuse沒設定時的no-op替身，讓`@observe(...)`不管有沒有裝Langfuse都能用。"""
+        def _decorator(fn):
+            return fn
+        if _args and callable(_args[0]):
+            return _args[0]
+        return _decorator
+
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 import time
 
-import pandas as pd  # 讀取 Excel 用
 import requests
 import glob
 import xml.etree.ElementTree as ET
-from pathlib import Path
 import sys
+
+from repository import get_attractions_for_area, get_lodgings_for_area, get_district_coords
+
+# RAG（Data/chroma/ 向量索引 + Data/bm25_index.pkl）是選配：索引沒建過、或缺
+# chromadb/fastembed/rank_bm25 依賴時，不該讓整個 system.py 連天氣查詢都掛掉——
+# import 失敗就退回 repository 的純名稱清單。優先用 hybrid_search（BM25+語意
+# RRF融合），eval/ 實測 Hit Rate@5 比純語意檢索高（91.67% vs 83.33%，見
+# ROADMAP.md Phase 1）；只有 hybrid_search 依賴（rank_bm25/jieba/bm25索引檔）
+# 缺了才退回純語意的 rag.py，兩者介面(search)相同不用改呼叫端。
+try:
+    import hybrid_search as rag_module
+    RAG_AVAILABLE = True
+except Exception:
+    try:
+        import rag as rag_module
+        RAG_AVAILABLE = True
+    except Exception:
+        rag_module = None
+        RAG_AVAILABLE = False
 
 # Standardized prefixes to avoid emoji/encoding issues on some consoles
 ERROR_PREFIX = "ERROR:"
@@ -59,74 +114,94 @@ if env_openai_key:
 
 # （已移除本機 SQLite DB 支援，改以 Open‑Meteo 作為唯一資料來源）
 
-# 自訂區域 ID ↔ 區域名稱 對應表
-CUSTOM_ID_TO_NAME_MAP = {
-    1: "中區", 2: "北區", 3: "北屯區", 4: "南區", 5: "南屯區",
-    6: "后里區", 7: "和平區", 8: "外埔區", 9: "大安區", 10: "大甲區",
-    11: "大肚區", 12: "大里區", 13: "大雅區", 14: "太平區", 15: "新社區",
-    16: "東勢區", 17: "東區", 18: "梧棲區", 19: "沙鹿區", 20: "清水區",
-    21: "潭子區", 22: "烏日區", 23: "石岡區", 24: "神岡區", 25: "西區",
-    26: "西屯區", 27: "豐原區", 28: "霧峰區", 29: "龍井區"
-}
-NAME_TO_CUSTOM_ID_MAP = {v: k for k, v in CUSTOM_ID_TO_NAME_MAP.items()}
+# 縣市＋行政區座標改查 Data/travel.db 的 district_coords 表（見
+# collector/derive_district_coords.py），不再手打台中30區座標——舊版只涵蓋台中，
+# 現在資料全台皆有，靠一份手打 dict 沒辦法跟著全台區維護。
+DEFAULT_CITY = "臺中市"
+DEFAULT_COORDS = (24.1477, 120.6736)  # 台中市中心，找不到任何座標時的最後備援
 
-# 可擴充的行政區 -> 經緯度映射（若無更精準座標，會使用台中市中心作為預設）
-# 注意：部分座標為暫時預設（使用台中市中心），若需要更精準位置建議以官方或地理編碼資料更新。
-TAICHUNG_CENTER = (24.1477, 120.6736)
-AREA_COORDS: dict[str, tuple[float, float]] = {
-    "台中市": TAICHUNG_CENTER,
-    "臺中": TAICHUNG_CENTER,
-    # 市中心或主要行政區（若有更精準經緯度，可替換下列值）
-    "中區": (24.14383, 120.67951),
-    "北區": (24.166039, 120.682318),
-    "西區": (24.14138, 120.67104),
-    "東區": (24.136625, 120.703854),
-    "南區": (24.117079, 120.663608),
-    "北屯區": (24.182264, 120.686288),
-    "西屯區": (24.165303, 120.633655),
-    "南屯區": (24.134631, 120.644374),
-    "太平區": (24.126472, 120.718523),
-    "大里區": (24.099417, 120.67786),
-    "霧峰區": (24.061698, 120.700272),
-    "豐原區": (24.24219, 120.71846),
-    "潭子區": (24.20953, 120.70516),
-    "大雅區": (24.229141, 120.64778),
-    "大甲區": (24.34892, 120.62239),
-    "外埔區": (24.33201, 120.65437),
-    "清水區": (24.268576, 120.559767),
-    "梧棲區": (24.254924, 120.531626),
-    "龍井區": (24.192679, 120.545838),
-    "烏日區": (24.104696, 120.623806),
-    "大肚區": (24.151083, 120.545439),
-    "石岡區": (24.27498, 120.78041),
-    "后里區": (24.30491, 120.71071),
-    "新社區": (24.23414, 120.8095),
-    "東勢區": (24.25861, 120.82777),
-    "和平區": (24.17477, 120.88349),
-    "神岡區": (24.257826, 120.661511),
-    "沙鹿區": (24.233445, 120.566218),
-    "大安區": (24.34607, 120.58652),
-    # 若有需要，可在此處加入更多別名或替代拼法
-}
 
-# ========= 一啟動程式就把 attractions.xlsx 讀進來 =========
-# 使用整合後的景點檔案（與 Streamlit app 相同）
-EXCEL_PATH = r"E:\python_project\contest\TGIS\Data\location_consolidated_enhanced.xlsx"
-try:
-    # sheet_name=None 會把每個 sheet 讀成 { "西屯區": DataFrame, "北區": DataFrame, ... }
-    ATTRACTIONS_SHEETS: dict[str, pd.DataFrame] = pd.read_excel(
-        EXCEL_PATH, sheet_name=None, engine="openpyxl"
-    )
-except Exception as e:
-    # 讀不到 Excel 不應該阻斷整個應用，改為空資料並在日誌中提醒
-    print(_make_safe(f"{WARN_PREFIX} 無法讀取 Excel 檔 {EXCEL_PATH}：{e} - 將使用空的景點/住宿清單"))
-    ATTRACTIONS_SHEETS = {}
-# ======================================================
+def _resolve_coords(area: Optional[str], city: str) -> tuple:
+    if area:
+        coords = get_district_coords(city, area)
+        if coords:
+            return coords
+    return DEFAULT_COORDS
 
+
+# 兼容舊版與新版 openai 套件的共用 helper——原本 analyze_prompt_with_llm() 跟
+# generate_answer_from_user_prompt_and_data() 各自 nested 定義一份完全一樣的
+# code，搬到 module 層級後兩邊共用同一份，改一次兩邊都生效。
+def _create_chat_completion(model, messages, **kwargs):
+    if HAS_OPENAI_NEW and OpenAI is not None:
+        client = OpenAI()
+        return client.chat.completions.create(model=model, messages=messages, **kwargs)
+    else:
+        # fallback to older openai package interface
+        return openai.ChatCompletion.create(model=model, messages=messages, **kwargs)
+
+
+def _extract_content(resp):
+    # 嘗試多種可用的位置來取得回傳內容
+    try:
+        return resp.choices[0].message.content
+    except Exception:
+        try:
+            return resp.choices[0].message['content']
+        except Exception:
+            try:
+                return resp.choices[0].text
+            except Exception:
+                raise RuntimeError('無法從 LLM 回傳中擷取內容')
+
+
+def _is_machine_like(s: str) -> bool:
+    """判斷 LLM 回傳是不是機器格式（純 JSON/空值），不是可讀文字。
+    搬到 module 層級才能直接 import 測試——原本是
+    generate_answer_from_user_prompt_and_data() 內部的 nested function，沒辦法
+    單獨測。"""
+    if s is None:
+        return True
+    if not isinstance(s, str):
+        return True
+    ss = s.strip()
+    if not ss:
+        return True
+    low = ss.lower()
+    # 明顯純 JSON 結構但內容沒有可讀文字
+    if low in ('[]', '[ ]', '{}'):
+        return True
+    try:
+        parsed = json.loads(ss)
+        # 如果解析後是 list/dict，檢查是否可以抽出任何非空字串
+        def has_useful(o):
+            if o is None:
+                return False
+            if isinstance(o, str):
+                return bool(o.strip())
+            if isinstance(o, (list, tuple)):
+                return any(has_useful(i) for i in o)
+            if isinstance(o, dict):
+                return any(has_useful(v) for v in o.values())
+            return True
+        if isinstance(parsed, (list, dict)) and not has_useful(parsed):
+            return True
+    except Exception:
+        # 若不能解析但包含多個 null/none，視為機器格式
+        if low.count('null') >= 1 or low.count('none') >= 1:
+            # 若字串很短且大部分是 null/brackets，視為機器格式
+            cleaned = low.replace('null', '').replace('none', '').replace('[', '').replace(']', '').replace('{', '').replace('}', '').strip()
+            if len(cleaned) < 10:
+                return True
+    return False
+
+
+@observe(name="analyze_prompt_with_llm")
 def analyze_prompt_with_llm(user_prompt: str) -> dict:
     """
     呼叫 LLM 把使用者問題解析成 JSON，包含：
       - type: 'radar' 或 'forecast'
+      - city: 縣市名稱 (e.g. '臺北市')，未提及時預設台中市
       - area: 行政區名稱 (e.g. '西屯區')
       - date: YYYY-MM-DD (若 type == 'forecast')
       - hour: HH:MM (可選，否則預設用 06:00 或 18:00)
@@ -138,33 +213,13 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
         "- type: 'radar' 或 'forecast'\n"
         "  - 查詢『現在、即時、等一下、目前、這時候』等屬於 radar\n"
         "  - 查詢『明天、後天、週末、晚上、早上、未來幾天、6月3日』等屬於 forecast\n\n"
-        "- area: 台中市的行政區名稱，如 '西屯區', '北區' 等；若提及景點，請推論該景點所屬的行政區。\n"
+        "- city: 台灣縣市全名，如 '臺北市', '高雄市' 等（簡稱如台北、台中請轉成官方全名，"
+        "'台'一律寫成'臺'）；使用者沒提到縣市時，預設 '臺中市'。\n"
+        "- area: 該縣市的行政區名稱，如 '西屯區', '北區' 等；若提及景點，請推論該景點所屬的縣市與行政區。\n"
         "- date: 如果 type 是 forecast，請回傳查詢目標日期（格式：YYYY-MM-DD）\n"
         "- hour: 如有提供時間，回傳格式為 'HH:MM'，否則可省略\n\n"
     "僅回傳 JSON 結果，請勿加入解釋或多餘文字。"
     )
-
-    # 兼容舊版與新版 openai 套件，統一呼叫 helper
-    def _create_chat_completion(model, messages, **kwargs):
-        if HAS_OPENAI_NEW and OpenAI is not None:
-            client = OpenAI()
-            return client.chat.completions.create(model=model, messages=messages, **kwargs)
-        else:
-            # fallback to older openai package interface
-            return openai.ChatCompletion.create(model=model, messages=messages, **kwargs)
-
-    def _extract_content(resp):
-        # 嘗試多種可用的位置來取得回傳內容
-        try:
-            return resp.choices[0].message.content
-        except Exception:
-            try:
-                return resp.choices[0].message['content']
-            except Exception:
-                try:
-                    return resp.choices[0].text
-                except Exception:
-                    raise RuntimeError('無法從 LLM 回傳中擷取內容')
 
     response = _create_chat_completion(
         model="gpt-4o-mini",
@@ -184,74 +239,7 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
     return json.loads(content)
 
 
-def get_attractions_for_area(area: str, top_n: int = 5) -> list[str]:
-    """
-    回傳該區域 (area) 前 top_n 名 Type == "attraction" 的景點名稱清單。
-    如果找不到該區 sheet 或沒有 Type/Name 欄位，回傳空 list。
-    """
-    # ATTRACTIONS_SHEETS may be a dict of sheets (one-per-district) or a single consolidated sheet.
-    df: Optional[pd.DataFrame] = ATTRACTIONS_SHEETS.get(area)
-    if df is None:
-        # If there's a single consolidated sheet (e.g., 'Sheet1'), use it and filter by source_district
-        if isinstance(ATTRACTIONS_SHEETS, dict) and len(ATTRACTIONS_SHEETS) == 1:
-            df = list(ATTRACTIONS_SHEETS.values())[0]
-        else:
-            return []
-
-    if "Type" not in df.columns or "Name" not in df.columns:
-        return []
-
-    # 如果 DataFrame 有 source_district 欄位，優先以包含比對 (contains) 來篩選該區域
-    df_work = df.copy()
-    if 'source_district' in df_work.columns and isinstance(area, str):
-        norm_area = area.replace('台', '臺')
-        # match either '沙鹿' or '沙鹿區' etc.
-        df_work = df_work[df_work['source_district'].astype(str).str.contains(norm_area, na=False, case=False)]
-
-    # 篩出 Type = "attraction"
-    df_attraction = df_work[df_work["Type"].astype(str).str.lower() == "attraction"].copy()
-    if df_attraction.empty:
-        return []
-
-    # 如果有 Rating 欄，就依 Rating 由高到低排序
-    if "Rating" in df_attraction.columns:
-        try:
-            df_attraction = df_attraction.sort_values("Rating", ascending=False)
-        except Exception:
-            pass
-
-    # 回傳前 top_n 個 Name
-    return df_attraction["Name"].head(top_n).astype(str).tolist()
-
-
-def get_lodgings_for_area(area: str, top_n: int = 3) -> list[str]:
-    """
-    回傳該區域 (area) 前 top_n 名 Type == "hotel" 的住宿名稱清單。
-    如果找不到該區 sheet 或沒有 Type/Name 欄位，回傳空 list。
-    """
-    df: Optional[pd.DataFrame] = ATTRACTIONS_SHEETS.get(area)
-    if df is None:
-        return []
-
-    if "Type" not in df.columns or "Name" not in df.columns:
-        return []
-
-    # 篩出 Type = "hotel"
-    df_hotel = df[df["Type"].astype(str).str.lower() == "hotel"].copy()
-    if df_hotel.empty:
-        return []
-
-    # 如果有 Rating 欄，就依 Rating 由高到低排序
-    if "Rating" in df_hotel.columns:
-        try:
-            df_hotel = df_hotel.sort_values("Rating", ascending=False)
-        except Exception:
-            pass
-
-    # 回傳前 top_n 個 Name
-    return df_hotel["Name"].head(top_n).astype(str).tolist()
-
-
+@observe(name="generate_answer_from_user_prompt_and_data")
 def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str) -> str:
     """
     呼叫 LLM，把「使用者提問」以及拼好的 raw_data (包含天氣、景點、住宿)
@@ -273,26 +261,6 @@ def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str) -
         f"查詢結果如下：\n{raw_data}\n"
         "請根據上述內容，生成一段自然語言的回答。"
     )
-
-    # 使用與 analyze_prompt_with_llm 相同的兼容 helper
-    def _create_chat_completion(model, messages, **kwargs):
-        if HAS_OPENAI_NEW and OpenAI is not None:
-            client = OpenAI()
-            return client.chat.completions.create(model=model, messages=messages, **kwargs)
-        else:
-            return openai.ChatCompletion.create(model=model, messages=messages, **kwargs)
-
-    def _extract_content(resp):
-        try:
-            return resp.choices[0].message.content
-        except Exception:
-            try:
-                return resp.choices[0].message['content']
-            except Exception:
-                try:
-                    return resp.choices[0].text
-                except Exception:
-                    raise RuntimeError('無法從 LLM 回傳中擷取內容')
 
     try:
         response = _create_chat_completion(
@@ -347,42 +315,6 @@ def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str) -
     # 最後一層防護：如果回傳是空字串或仍看起來像機器格式（例如只包含 [] 或大量 null），
     # 則直接回退為友善訊息，避免把機器格式傳回到前端
     try:
-        def _is_machine_like(s: str) -> bool:
-            if s is None:
-                return True
-            if not isinstance(s, str):
-                return True
-            ss = s.strip()
-            if not ss:
-                return True
-            low = ss.lower()
-            # 明顯純 JSON 結構但內容沒有可讀文字
-            if low in ('[]', '[ ]', '{}'):
-                return True
-            try:
-                parsed = json.loads(ss)
-                # 如果解析後是 list/dict，檢查是否可以抽出任何非空字串
-                def has_useful(o):
-                    if o is None:
-                        return False
-                    if isinstance(o, str):
-                        return bool(o.strip())
-                    if isinstance(o, (list, tuple)):
-                        return any(has_useful(i) for i in o)
-                    if isinstance(o, dict):
-                        return any(has_useful(v) for v in o.values())
-                    return True
-                if isinstance(parsed, (list, dict)) and not has_useful(parsed):
-                    return True
-            except Exception:
-                # 若不能解析但包含多個 null/none，視為機器格式
-                if low.count('null') >= 1 or low.count('none') >= 1:
-                    # 若字串很短且大部分是 null/brackets，視為機器格式
-                    cleaned = low.replace('null', '').replace('none', '').replace('[', '').replace(']', '').replace('{', '').replace('}', '').strip()
-                    if len(cleaned) < 10:
-                        return True
-            return False
-
         if _is_machine_like(generated_summary):
             generated_summary = "（OpenAI 回傳的內容無法解析為可讀文字，請稍候重試或調整查詢。）"
     except Exception:
@@ -392,15 +324,14 @@ def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str) -
     return generated_summary
 
 
-def fetch_radar_data(district_id: int, limit: int = 5) -> str:
+def fetch_radar_data(area: Optional[str], city: str = DEFAULT_CITY, limit: int = 5) -> str:
     """
-    查詢指定 district_id 的即時雷達回波資料，取最新 limit 筆，並回傳成文字。
+    查詢指定縣市/行政區的即時雷達回波資料，取最新 limit 筆，並回傳成文字。
     """
     # 移除本機 DB 存取：直接使用 Open‑Meteo 的降水摘要作為雷達/降雨資料來源
     try:
-        area_name = CUSTOM_ID_TO_NAME_MAP.get(district_id)
-        header = f"📡 使用 Open‑Meteo 取得 {area_name or '指定區域'} 的近期降水摘要（不使用本機 DB）：\n"
-        body = fetch_precipitation_open_meteo(area=area_name)
+        header = f"📡 使用 Open‑Meteo 取得 {city}{area or ''} 的近期降水摘要（不使用本機 DB）：\n"
+        body = fetch_precipitation_open_meteo(area=area, city=city)
         return header + body
     except Exception as e:
         return _make_safe(f"{ERROR_PREFIX} 雷達資料查詢錯誤（Open‑Meteo）：{e}")
@@ -439,16 +370,14 @@ def get_latest_radar_summary(radar_dir: str = r"E:\python_project\contest\TGIS\r
         return f"（讀取 radar/遠端降水摘要時發生錯誤：{e}）"
 
 
-def fetch_precipitation_open_meteo(area: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None) -> str:
+def fetch_precipitation_open_meteo(area: Optional[str] = None, city: str = DEFAULT_CITY, lat: Optional[float] = None, lon: Optional[float] = None) -> str:
     """
-    使用 Open-Meteo 取得最近數小時的降雨量（作為 radar 的替代），若有 area 可用 AREA_COORDS
-    回傳簡短文字摘要。
+    使用 Open-Meteo 取得最近數小時的降雨量（作為 radar 的替代），若有 area 會查
+    district_coords 表取得座標，回傳簡短文字摘要。
     """
     try:
-        if area and area in AREA_COORDS:
-            lat, lon = AREA_COORDS[area]
         if lat is None or lon is None:
-            lat, lon = AREA_COORDS.get("台中市", (24.1477, 120.6736))
+            lat, lon = _resolve_coords(area, city)
 
         # 取得最近 6 小時的 hourly precipitation
         url = (
@@ -474,15 +403,15 @@ def fetch_precipitation_open_meteo(area: Optional[str] = None, lat: Optional[flo
         return f"（取得遠端降水資料時發生錯誤：{e}）"
 
 
-def fetch_current_weather_open_meteo(lat: float = 24.1477, lon: float = 120.6736, area: Optional[str] = None) -> str:
+def fetch_current_weather_open_meteo(lat: float = 24.1477, lon: float = 120.6736, area: Optional[str] = None, city: str = DEFAULT_CITY) -> str:
     """
     使用 Open-Meteo 公共 API 取得當前天氣（free, 無需 API key）。
     回傳簡短文字摘要，便於作為 RAG 的上下文輸入給 LLM。
     """
     try:
-        # 如果有提供區域名稱且在 AREA_COORDS 中，使用其座標
-        if area and area in AREA_COORDS:
-            lat, lon = AREA_COORDS[area]
+        # 如果有提供區域名稱，查 district_coords 表取得座標
+        if area:
+            lat, lon = _resolve_coords(area, city)
         url = (
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
             "&current_weather=true&timezone=Asia/Taipei"
@@ -504,19 +433,19 @@ def fetch_current_weather_open_meteo(lat: float = 24.1477, lon: float = 120.6736
 
 
 def fetch_forecast_data(
-    district_id: int,
+    area: Optional[str],
+    city: str,
     target_date: datetime,
     limit: int = 1,
     target_hour: Optional[str] = None
 ) -> str:
     """
-    查詢指定 district_id 在 target_date (YYYY-MM-DD) 的天氣預報，
+    查詢指定縣市/行政區在 target_date (YYYY-MM-DD) 的天氣預報，
     若提供 target_hour (如 "06:00" 或 "18:00")，再依小時過濾，最後回傳文字結果。
     """
     try:
         # 直接使用 Open‑Meteo 取得該日預報（不再依賴本機 DB）
-        area_name = CUSTOM_ID_TO_NAME_MAP.get(district_id)
-        lat, lon = AREA_COORDS.get(area_name, AREA_COORDS.get("台中市"))
+        lat, lon = _resolve_coords(area, city)
         return fetch_forecast_open_meteo(lat, lon, target_date, target_hour)
     except Exception as e:
         return _make_safe(f"{ERROR_PREFIX} 預報資料查詢錯誤（Open‑Meteo）：{e}")
@@ -574,12 +503,67 @@ def fetch_forecast_open_meteo(lat: float, lon: float, target_date: datetime, tar
         return f"（使用 Open-Meteo 取得預報時發生錯誤：{e}）"
 
 
-def get_weather_data(user_prompt: str, area_override: Optional[str] = None) -> str:
+# 使用者問句裡出現這些字眼，代表想要「不受天氣影響」的景點——只對 attraction 有意義，
+# weather_fit 這個 metadata 欄位只有 attractions 才有（見 collector/attraction_classes.py）。
+# 用問句本身判斷，而不是抓即時天氣的 weathercode：使用者常問的是假設性的「如果下雨」
+# 或未來預報情境，不是當下天氣，問句字面比weathercode更直接對應使用者真正想要的東西。
+RAIN_OR_INDOOR_KEYWORDS = ("下雨", "雨天", "會下雨", "陰雨", "室內", "室内")
+INDOOR_WEATHER_FITS = ["indoor_ok", "mixed"]
+
+
+def _wants_indoor(user_prompt: str) -> bool:
+    return any(kw in user_prompt for kw in RAIN_OR_INDOOR_KEYWORDS)
+
+
+def _score_rag_fallback(fell_back: bool) -> None:
+    """幫Phase 5可觀測性補的信號：RAG查詢是不是退回了repository純名稱清單。
+    fallback比例突然升高代表RAG層本身出問題（索引壞掉、依賴缺失等），比單純LLM
+    延遲更早能看出RAG層健康度。Langfuse沒設定時直接跳過，不影響天氣查詢本身。"""
+    if not LANGFUSE_TRACING:
+        return
+    try:
+        from langfuse import get_client
+        get_client().score_current_span(
+            name="rag_fallback", value=1.0 if fell_back else 0.0, data_type="BOOLEAN"
+        )
+    except Exception:
+        pass
+
+
+@observe(name="rag_search")
+def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str, top_n: int) -> list:
+    """優先用 rag.search() 做語意檢索（依使用者原始問句排序，內容含真正的
+    description，不只是名稱），向量索引沒建、依賴沒裝、或該區在索引裡查無資料
+    （例如住宿description是樣板句被篩掉、沒進索引）時，退回 repository 的
+    純 metadata 名稱清單，至少保證查得到東西。
+
+    景點類查詢若問句提到下雨/室內，帶上 weather_fit 硬 filter（indoor_ok/mixed）
+    ——室內外這種硬分類之前實測過純語意檢索猜不準，必須靠 metadata 過濾，不能只讓
+    LLM 自己從 description 文字猜。"""
+    if RAG_AVAILABLE:
+        try:
+            weather_fit = INDOOR_WEATHER_FITS if (place_type == "attraction" and _wants_indoor(user_prompt)) else None
+            hits = rag_module.search(
+                user_prompt, city=city, district=area, type_=place_type, weather_fit=weather_fit, top_k=top_n
+            )
+            if hits:
+                _score_rag_fallback(False)
+                return [h["text"] for h in hits]
+        except Exception:
+            pass
+    _score_rag_fallback(True)
+    if place_type == "attraction":
+        return get_attractions_for_area(area, top_n=top_n, city=city)
+    return get_lodgings_for_area(area, top_n=top_n, city=city)
+
+
+@observe(name="get_weather_data")
+def get_weather_data(user_prompt: str, area_override: Optional[str] = None, city_override: Optional[str] = None) -> str:
     """
     主要入口：根據使用者提問，執行以下步驟：
-    1. analyze_prompt_with_llm 解析出 type, area, date, hour
+    1. analyze_prompt_with_llm 解析出 type, city, area, date, hour
     2. 依 type 決定呼叫 fetch_radar_data 或 fetch_forecast_data
-    3. 如果查到天氣資料，繼續抓該區域的景點與住宿清單
+    3. 如果查到天氣資料，繼續抓該縣市/行政區的景點與住宿清單
     4. 把「天氣＋景點＋住宿」組成 raw_data，呼叫 generate_answer_from_user_prompt_and_data
     5. 回傳 LLM 的最終建議 (不包含 system.py 自己的 CCTV 列表)
     """
@@ -590,20 +574,19 @@ def get_weather_data(user_prompt: str, area_override: Optional[str] = None) -> s
 
     query_type = info.get("type")
     area = info.get("area") # area 是中文區域名稱, e.g., "西屯區"
-    # 如果呼叫端提供覆寫的行政區，使用它
+    city = info.get("city") or DEFAULT_CITY
+    # 如果呼叫端提供覆寫的縣市/行政區，使用它
     if area_override:
         area = area_override
+    if city_override:
+        city = city_override
 
     if not area:
         return _make_safe(f"{ERROR_PREFIX} 無法辨識您想查詢的區域。") # 更友好的提示
 
-    district_id = NAME_TO_CUSTOM_ID_MAP.get(area)
-    if not district_id:
-        return _make_safe(f"{ERROR_PREFIX} 系統中找不到區域『{area}』的對應 ID，請確認是否為台中市的行政區。") # 更友好的提示
-
     raw_data = "" # 初始化 raw_data
     if query_type == "radar":
-        raw_data = fetch_radar_data(district_id)
+        raw_data = fetch_radar_data(area, city)
     elif query_type == "forecast":
         date_str = info.get("date")
         hour = info.get("hour", "06:00") # LLM 給的 hour
@@ -635,7 +618,8 @@ def get_weather_data(user_prompt: str, area_override: Optional[str] = None) -> s
 
 
         raw_data = fetch_forecast_data(
-            district_id,
+            area,
+            city,
             target_date=target_date,
             target_hour=hour
         )
@@ -654,14 +638,14 @@ def get_weather_data(user_prompt: str, area_override: Optional[str] = None) -> s
     except Exception:
         pass
     try:
-        # 優先以 area 取得即時天氣座標（若 area 在 AREA_COORDS 中則使用對應經緯度）
-        current_weather_summary = fetch_current_weather_open_meteo(area=area)
+        # 優先以 area+city 查 district_coords 取得即時天氣座標
+        current_weather_summary = fetch_current_weather_open_meteo(area=area, city=city)
         raw_data = f"[RAG - 即時天氣]\n{current_weather_summary}\n\n" + raw_data
     except Exception:
         pass
 
-    # 4. 抓取景點與住宿清單，並拼接到 raw_data
-    attractions_list = get_attractions_for_area(area, top_n=5)
+    # 4. 抓取景點與住宿清單（優先語意檢索，含真正的description），並拼接到 raw_data
+    attractions_list = _get_places_for_area(user_prompt, area, city, "attraction", top_n=5)
     if attractions_list:
         raw_data += "\n\n🏞️ 此區推薦景點：\n"
         for idx, name in enumerate(attractions_list, start=1):
@@ -669,7 +653,7 @@ def get_weather_data(user_prompt: str, area_override: Optional[str] = None) -> s
     else:
         raw_data += f"\n\n🏞️ 抱歉，目前沒有「{area}」的景點資料可供推薦。\n"
 
-    lodgings_list = get_lodgings_for_area(area, top_n=3)
+    lodgings_list = _get_places_for_area(user_prompt, area, city, "lodging", top_n=3)
     if lodgings_list:
         raw_data += "\n\n🏨 此區推薦住宿：\n"
         for idx, name in enumerate(lodgings_list, start=1):

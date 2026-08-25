@@ -1,0 +1,22 @@
+[
+  {"query": "西屯區現在在下雨嗎", "type": "radar", "city": "臺中市", "area": "西屯區"},
+  {"query": "北屯區等一下的天氣如何", "type": "radar", "city": "臺中市", "area": "北屯區"},
+  {"query": "高雄市前鎮區現在天氣怎樣", "type": "radar", "city": "高雄市", "area": "前鎮區"},
+  {"query": "台北市大安區這時候會不會下雨", "type": "radar", "city": "臺北市", "area": "大安區"},
+  {"query": "台南中西區目前的天氣狀況", "type": "radar", "city": "臺南市", "area": "中西區"},
+  {"query": "西屯區明天天氣如何", "type": "forecast", "city": "臺中市", "area": "西屯區", "date_offset_days": 1},
+  {"query": "後天北屯區會下雨嗎", "type": "forecast", "city": "臺中市", "area": "北屯區", "date_offset_days": 2},
+  {"query": "高雄前鎮區明天要不要帶傘", "type": "forecast", "city": "高雄市", "area": "前鎮區", "date_offset_days": 1},
+  {"query": "台北大安區這個週末天氣好嗎", "type": "forecast", "city": "臺北市", "area": "大安區"},
+  {"query": "新竹市東區明天早上天氣如何", "type": "forecast", "city": "新竹市", "area": "東區", "date_offset_days": 1, "hour": "06:00"},
+  {"query": "台南中西區明天晚上會不會下雨", "type": "forecast", "city": "臺南市", "area": "中西區", "date_offset_days": 1, "hour": "18:00"},
+  {"query": "宜蘭礁溪鄉明天天氣", "type": "forecast", "city": "宜蘭縣", "area": "礁溪鄉", "date_offset_days": 1},
+  {"query": "去赤崁樓玩，那邊現在天氣如何", "type": "radar", "city": "臺南市", "area": "中西區"},
+  {"query": "西屯區的天氣", "type": "radar", "city": "臺中市", "area": "西屯區"},
+  {"query": "西屯區後天下午的天氣", "type": "forecast", "city": "臺中市", "area": "西屯區", "date_offset_days": 2},
+  {"query": "南屯區現在天氣好嗎", "type": "radar", "city": "臺中市", "area": "南屯區"},
+  {"query": "屏東恆春鎮明天天氣", "type": "forecast", "city": "屏東縣", "area": "恆春鎮", "date_offset_days": 1},
+  {"query": "花蓮吉安鄉現在會下雨嗎", "type": "radar", "city": "花蓮縣", "area": "吉安鄉"},
+  {"query": "台中豐原區明天天氣如何", "type": "forecast", "city": "臺中市", "area": "豐原區", "date_offset_days": 1},
+  {"query": "南投埔里鎮現在的天氣", "type": "radar", "city": "南投縣", "area": "埔里鎮"}
+]

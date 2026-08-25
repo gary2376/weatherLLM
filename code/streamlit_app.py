@@ -11,6 +11,8 @@ import os
 import importlib
 import json
 
+import repository
+
 # 全域顯示前的 sanitizer，確保傳給 Streamlit 的一定是可顯示的字串
 def sanitize_for_display(content) -> str:
     try:
@@ -110,9 +112,10 @@ class CCTVManager:
             for idx, row in attractions_df.iterrows():
                 try: lat, lng = float(row['latitude']), float(row['longitude'])
                 except (ValueError, TypeError): continue
-                popup_content_attraction = f"""<div style="width: 250px;"><h4>{row['Name']} ({row.get('Type', '景點')})</h4><p><b>評分:</b> {row.get('Rating', 'N/A')}</p><p><b>地區:</b> {row.get('source_district', 'N/A')}</p><p><b>座標:</b> {lat:.6f}, {lng:.6f}</p></div>"""
-                folium.Marker(location=[lat, lng], popup=folium.Popup(popup_content_attraction, max_width=270), 
-                              tooltip=f"{row['Name']} ({row.get('Type', '景點')})", 
+                place_label = row.get('category') or row.get('price_range') or '景點'
+                popup_content_attraction = f"""<div style="width: 250px;"><h4>{row['name']} ({place_label})</h4><p><b>地區:</b> {row.get('city', '')}{row.get('district', 'N/A')}</p><p><b>座標:</b> {lat:.6f}, {lng:.6f}</p></div>"""
+                folium.Marker(location=[lat, lng], popup=folium.Popup(popup_content_attraction, max_width=270),
+                              tooltip=f"{row['name']} ({place_label})",
                               icon=folium.Icon(color='green', icon='map-marker', prefix='fa')).add_to(m)
         return m
 
@@ -134,48 +137,25 @@ class CCTVManager:
         return sorted(nearby_cctvs, key=lambda x: x['distance'])
 
 class AttractionManager:
-    def __init__(self, excel_path: str):
-        self.excel_path = excel_path
-        self.attraction_data: pd.DataFrame = self._load_attraction_data()
+    """景點/住宿改讀 Data/travel.db（見 repository.py），不再預先整包載入記憶體，
+    每次查詢才下 SQL 撈需要的那一小塊。新資料源沒有 Rating、沒有餐廳類別（見 ROADMAP.md Phase 0）。"""
 
-    def _load_attraction_data(self) -> pd.DataFrame:
-        default_cols = ['Name', 'source_district', 'Type', 'Rating', 'latitude', 'longitude', 'geohash', 'administrative_district']
-        try:
-            data = pd.read_excel(self.excel_path)
-            required_check_cols = ['Name', 'source_district', 'Type', 'Rating', 'latitude', 'longitude']
-            missing_cols = [col for col in required_check_cols if col not in data.columns]
-            if missing_cols:
-                for col in missing_cols: st.error(f"景點資料缺少必要欄位: {col}")
-                st.warning(f"請檢查 Excel 檔案 '{Path(self.excel_path).name}' 的欄位。")
-                return pd.DataFrame(columns=default_cols)
-            data['latitude'] = pd.to_numeric(data['latitude'], errors='coerce')
-            data['longitude'] = pd.to_numeric(data['longitude'], errors='coerce')
-            data.dropna(subset=['latitude', 'longitude'], inplace=True)
-            data['Rating'] = pd.to_numeric(data['Rating'], errors='coerce')
-            geohash_precision_storage = 7 
-            data['geohash'] = data.apply(
-                lambda row: pgh.encode(row['latitude'], row['longitude'], precision=geohash_precision_storage)
-                if pd.notnull(row['latitude']) and pd.notnull(row['longitude']) else None, axis=1)
-            data = data.dropna(subset=['geohash'])
-            if 'administrative_district' not in data.columns: data['administrative_district'] = data['source_district']
+    def get_attractions(self, city: str = "臺中市", district: Optional[str] = None,
+                         attraction_type: Optional[str] = None, num_attractions: int = 5) -> pd.DataFrame:
+        type_map = {"景點": "attraction", "住宿": "hotel", "飯店": "hotel", "餐廳": "restaurant"}
+        kind = type_map.get(attraction_type, attraction_type)
+        if kind == "hotel":
+            data = repository.query_lodgings(city=city, district=district, top_n=num_attractions)
+        elif kind == "restaurant":
+            data = repository.query_restaurants(city=city, district=district, top_n=num_attractions)
+        else:
+            data = repository.query_attractions(city=city, district=district, top_n=num_attractions)
+        if data.empty:
             return data
-        except FileNotFoundError: st.error(f"找不到景點 Excel 檔案: {self.excel_path}"); return pd.DataFrame(columns=default_cols)
-        except Exception as e: st.error(f"載入景點資料時發生錯誤: {e}"); return pd.DataFrame(columns=default_cols)
-
-    def get_attractions(self, district: Optional[str] = None, attraction_type: Optional[str] = None, num_attractions: int = 5) -> pd.DataFrame:
-        if self.attraction_data.empty: return pd.DataFrame()
-        filtered_data = self.attraction_data.copy()
-        if district:
-            norm_dist = district.replace("台", "臺")
-            cond = filtered_data['source_district'].astype(str).str.contains(norm_dist, na=False, case=False)
-            if 'administrative_district' in filtered_data.columns:
-                cond |= filtered_data['administrative_district'].astype(str).str.contains(norm_dist, na=False, case=False)
-            filtered_data = filtered_data[cond]
-        if attraction_type:
-            type_map = {"景點": "attraction", "餐廳": "restaurant", "住宿": "hotel", "飯店": "hotel"}
-            search_val = type_map.get(attraction_type, attraction_type)
-            filtered_data = filtered_data[filtered_data['Type'].astype(str).str.contains(search_val, case=False, na=False)]
-        return filtered_data.sort_values(by='Rating', ascending=False, na_position='last').head(num_attractions)
+        data['geohash'] = data.apply(
+            lambda row: pgh.encode(row['latitude'], row['longitude'], precision=7)
+            if pd.notnull(row['latitude']) and pd.notnull(row['longitude']) else None, axis=1)
+        return data.dropna(subset=['geohash'])
 
 class WeatherChatbot:
     def __init__(self, cctv_manager: CCTVManager, attraction_manager: AttractionManager):
@@ -186,6 +166,8 @@ class WeatherChatbot:
         self.attraction_query_keywords = ['景點', '好玩', '去處', '旅遊', '玩樂', '觀光', '參觀', '逛逛', '玩']
         self.restaurant_query_keywords = ['餐廳', '美食', '吃飯', '小吃', '好吃']
         self.hotel_query_keywords = ['住宿', '飯店', '旅館', '民宿', '住哪']
+
+    CITY_NAME_MAP = {"台中": "臺中市", "台北": "臺北市", "新竹": "新竹市", "台南": "臺南市", "高雄": "高雄市"}
 
     def process_message(self, user_message: str, override_district: Optional[str] = None) -> Tuple[str, List[str], Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
         """
@@ -242,13 +224,16 @@ class WeatherChatbot:
             if not search_area:
                 search_area = "台中"
                 response_parts = [f"您似乎沒有指定地區，我將為您搜尋'{search_area}'的{place_map[search_type]}。"]
-            recommended_attractions_df = self.attraction_manager.get_attractions(district=search_area, attraction_type=search_type)
+            resolved_city = self.CITY_NAME_MAP.get(target_region, "臺中市")
+            recommended_attractions_df = self.attraction_manager.get_attractions(
+                city=resolved_city, district=(target_district or None), attraction_type=search_type)
             if recommended_attractions_df is not None and not recommended_attractions_df.empty:
                 legend_text = " (地圖上以 <font color='green'>綠色圖釘</font> 標記)"
                 if search_type == "attraction": response_parts.append(f"建議關注的旅遊景點：{legend_text}")
                 else: response_parts.append(f"\n為您找到以下位於'{search_area}'的推薦{place_map[search_type]}:{legend_text}")
                 for i, (_, row) in enumerate(recommended_attractions_df.iterrows(), 1):
-                    response_parts.append(f"{i}. **{row['Name']}** (類型: {row.get('Type','N/A')}, 評分: {row['Rating'] if pd.notna(row['Rating']) else 'N/A'}, 行政區: {row.get('source_district','N/A')})")
+                    detail = row.get('category') or row.get('price_range') or 'N/A'
+                    response_parts.append(f"{i}. **{row['name']}** ({detail}, 行政區: {row.get('city','')}{row.get('district','N/A')})")
                 cctvs_near_attractions_names = []
                 geohash_search_precision = 6 
                 all_cctvs_df = self.cctv_manager.cctv_data
@@ -330,12 +315,11 @@ def initialize_session_state():
     data_dir = project_root / 'Data'
 
     cctv_path = str(data_dir / 'cctv_enhanced.csv')
-    attraction_path = str(data_dir / 'location_consolidated_enhanced.xlsx')
 
     if 'cctv_manager' not in st.session_state:
         st.session_state.cctv_manager = CCTVManager(str(cctv_path))
     if 'attraction_manager' not in st.session_state:
-        st.session_state.attraction_manager = AttractionManager(str(attraction_path))
+        st.session_state.attraction_manager = AttractionManager()
     if 'chatbot' not in st.session_state: st.session_state.chatbot = WeatherChatbot(st.session_state.cctv_manager, st.session_state.attraction_manager)
     if 'highlighted_cctvs' not in st.session_state: st.session_state.highlighted_cctvs = []
     if 'recommended_attractions_on_map' not in st.session_state: st.session_state.recommended_attractions_on_map = None

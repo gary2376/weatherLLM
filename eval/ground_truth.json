@@ -1,0 +1,28 @@
+[
+  {"query": "台中親子景點推薦", "city": "臺中市", "district": null, "type": "attraction", "expected_id": "Attraction_387000000A_001468", "note": "Hione World海灣樂世界"},
+  {"query": "南投可以看雲海跟夜景的地方", "city": "南投縣", "district": "魚池鄉", "type": "attraction", "expected_id": "Attraction_A15010600H_000094", "note": "金龍山"},
+  {"query": "台南必去的古蹟景點", "city": "臺南市", "district": "中西區", "type": "attraction", "expected_id": "Attraction_395000000A_000674", "note": "赤崁樓"},
+  {"query": "有櫻花跟千年神木的部落秘境", "city": "新竹縣", "district": "尖石鄉", "type": "attraction", "expected_id": "Attraction_376440000A_000189", "note": "司馬庫斯"},
+  {"query": "花蓮的歷史古道健行步道", "city": "花蓮縣", "district": "卓溪鄉", "type": "attraction", "expected_id": "Attraction_376550000A_000088", "note": "瓦拉米步道"},
+  {"query": "台北免費看展覽的美術館", "city": "臺北市", "district": "中山區", "type": "attraction", "expected_id": "Attraction_379000000A_000030", "note": "臺北市立美術館"},
+  {"query": "宜蘭礁溪泡溫泉的地方", "city": "宜蘭縣", "district": "礁溪鄉", "type": "attraction", "expected_id": "Attraction_376420000A_000090", "note": "礁溪溫泉廣場"},
+  {"query": "屏東小琉球可以玩沙戲水的沙灘", "city": "屏東縣", "district": "琉球鄉", "type": "attraction", "expected_id": "Attraction_A15010400H_000490", "note": "中澳沙灘"},
+
+  {"query": "花蓮可以看到海景的民宿", "city": "花蓮縣", "district": "吉安鄉", "type": "lodging", "expected_id": "Hotel_A15010000H_010769", "note": "撒花庄庭園民宿"},
+  {"query": "宜蘭三星適合全家出遊包棟的民宿", "city": "宜蘭縣", "district": "三星鄉", "type": "lodging", "expected_id": "Hotel_A15010000H_038602", "note": "雙生奇緣"},
+  {"query": "台中北屯可以帶寵物入住的旅館", "city": "臺中市", "district": "北屯區", "type": "lodging", "expected_id": "Hotel_A15010000H_018815", "note": "佩德先生 Mr.Petter"},
+  {"query": "南投埔里生態共生自然的民宿", "city": "南投縣", "district": "埔里鎮", "type": "lodging", "expected_id": "Hotel_A15010000H_006586", "note": "水泥角生態民宿"},
+  {"query": "墾丁可以看山景海景還能觀星的民宿", "city": "屏東縣", "district": "恆春鎮", "type": "lodging", "expected_id": "Hotel_A15010000H_000850", "note": "墾丁羊角村"},
+  {"query": "墾丁有游泳池的度假飯店", "city": "屏東縣", "district": "恆春鎮", "type": "lodging", "expected_id": "Hotel_A15010000H_006757", "note": "墾丁夏都沙灘酒店"},
+  {"query": "台南老屋翻新改造的旅館", "city": "臺南市", "district": "中西區", "type": "lodging", "expected_id": "Hotel_A15010000H_010015", "note": "嘉旅館(2館)"},
+  {"query": "宜蘭三星適合小孩玩溜滑梯戲水池的親子民宿", "city": "宜蘭縣", "district": "三星鄉", "type": "lodging", "expected_id": "Hotel_A15010000H_010627", "note": "夢想森林親子民宿"},
+
+  {"query": "台中蔬食義式料理餐廳", "city": "臺中市", "district": "西區", "type": "restaurant", "expected_id": "Restaurant_387000000A_005058", "note": "野菜共合國"},
+  {"query": "台南水果甜點下午茶", "city": "臺南市", "district": "北區", "type": "restaurant", "expected_id": "Restaurant_395000000A_002194", "note": "榮興水果店"},
+  {"query": "嘉義老屋改造的咖啡廳", "city": "嘉義市", "district": "西區", "type": "restaurant", "expected_id": "Restaurant_376600000A_000024", "note": "舊時光新鮮事"},
+  {"query": "澎湖七美吃海鮮合菜", "city": "澎湖縣", "district": "七美鄉", "type": "restaurant", "expected_id": "Restaurant_A15010200H_000008", "note": "七美漁村餐廳"},
+  {"query": "南投鳳梨酥伴手禮", "city": "南投縣", "district": "南投市", "type": "restaurant", "expected_id": "Restaurant_376480000A_000045", "note": "微熱山丘"},
+  {"query": "台中結合spa瑜珈的複合式私廚空間", "city": "臺中市", "district": "北屯區", "type": "restaurant", "expected_id": "Restaurant_387000000A_004826", "note": "DK9大坑九號"},
+  {"query": "道地客家菜餐館", "city": "桃園市", "district": "楊梅區", "type": "restaurant", "expected_id": "Restaurant_376430000A_000112", "note": "八方園客家餐館"},
+  {"query": "台中適合帶寵物跟小孩的餐廳", "city": "臺中市", "district": "北屯區", "type": "restaurant", "expected_id": "Restaurant_387000000A_004962", "note": "森林小徑親子友善寵物餐廳"}
+]
