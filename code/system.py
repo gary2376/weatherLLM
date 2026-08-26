@@ -45,9 +45,8 @@ else:
         return _decorator
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from typing import Optional
-import time
 
 import requests
 import glob
@@ -55,6 +54,7 @@ import xml.etree.ElementTree as ET
 import sys
 
 from repository import get_attractions_for_area, get_lodgings_for_area, get_district_coords
+import weather_graph
 
 # RAG（Data/chroma/ 向量索引 + Data/bm25_index.pkl）是選配：索引沒建過、或缺
 # chromadb/fastembed/rank_bm25 依賴時，不該讓整個 system.py 連天氣查詢都掛掉——
@@ -129,12 +129,19 @@ def _resolve_coords(area: Optional[str], city: str) -> tuple:
     return DEFAULT_COORDS
 
 
+# 系統邊界（見 ROADMAP.md Phase 2）：OpenAI 呼叫要有明確 timeout，不能讓
+# intent_node/synthesis_node 卡住整個 graph。重試上限不用自己寫——openai SDK
+# 的 client 預設就有 max_retries=2（暫時性網路錯誤/429會自動重試），這裡只補
+# 明確 timeout。（Open-Meteo 的 `requests.get()` 呼叫本來就已經有 `timeout=8/10`。）
+OPENAI_TIMEOUT_SECONDS = 20.0
+
+
 # 兼容舊版與新版 openai 套件的共用 helper——原本 analyze_prompt_with_llm() 跟
 # generate_answer_from_user_prompt_and_data() 各自 nested 定義一份完全一樣的
 # code，搬到 module 層級後兩邊共用同一份，改一次兩邊都生效。
 def _create_chat_completion(model, messages, **kwargs):
     if HAS_OPENAI_NEW and OpenAI is not None:
-        client = OpenAI()
+        client = OpenAI(timeout=OPENAI_TIMEOUT_SECONDS)
         return client.chat.completions.create(model=model, messages=messages, **kwargs)
     else:
         # fallback to older openai package interface
@@ -560,116 +567,21 @@ def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str
 @observe(name="get_weather_data")
 def get_weather_data(user_prompt: str, area_override: Optional[str] = None, city_override: Optional[str] = None) -> str:
     """
-    主要入口：根據使用者提問，執行以下步驟：
-    1. analyze_prompt_with_llm 解析出 type, city, area, date, hour
-    2. 依 type 決定呼叫 fetch_radar_data 或 fetch_forecast_data
-    3. 如果查到天氣資料，繼續抓該縣市/行政區的景點與住宿清單
-    4. 把「天氣＋景點＋住宿」組成 raw_data，呼叫 generate_answer_from_user_prompt_and_data
-    5. 回傳 LLM 的最終建議 (不包含 system.py 自己的 CCTV 列表)
+    主要入口：交給 `weather_graph.py` 的 LangGraph 節點圖執行：
+    intent_node（analyze_prompt_with_llm）→ weather_node（fetch_radar_data／
+    fetch_forecast_data＋即時天氣/雷達摘要）→ attraction_node/lodging_node
+    （平行，各自呼叫 `_get_places_for_area`）→ synthesis_node
+    （generate_answer_from_user_prompt_and_data）。
+
+    見 ROADMAP.md Phase 2——原本是一條到底的線性函式，拆成圖之後每個節點各自
+    獨立、之後要加逐節點的 timeout/重試或觀察個別節點延遲才有地方掛。節點內部
+    邏輯完全沿用本檔案既有函式，沒有重寫。`sys.modules[__name__]`
+    （也就是本檔案自己）傳給圖，讓節點呼叫到的是「當下」的函式版本——測試裡用
+    `monkeypatch.setattr(system, ...)` 蓋掉的函式，圖也會如實吃到，不會繞過。
     """
-    try:
-        info = analyze_prompt_with_llm(user_prompt)
-    except Exception as e: # 更通用的 Exception 捕捉
-        return _make_safe(f"{ERROR_PREFIX} Prompt 分析階段出錯：{e}") # 返回錯誤信息
-
-    query_type = info.get("type")
-    area = info.get("area") # area 是中文區域名稱, e.g., "西屯區"
-    city = info.get("city") or DEFAULT_CITY
-    # 如果呼叫端提供覆寫的縣市/行政區，使用它
-    if area_override:
-        area = area_override
-    if city_override:
-        city = city_override
-
-    if not area:
-        return _make_safe(f"{ERROR_PREFIX} 無法辨識您想查詢的區域。") # 更友好的提示
-
-    raw_data = "" # 初始化 raw_data
-    if query_type == "radar":
-        raw_data = fetch_radar_data(area, city)
-    elif query_type == "forecast":
-        date_str = info.get("date")
-        hour = info.get("hour", "06:00") # LLM 給的 hour
-
-        if not date_str:
-            return _make_safe(f"{ERROR_PREFIX} 預報查詢需要有效日期。") # 更友好的提示
-
-        try:
-            target_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            return _make_safe(f"{ERROR_PREFIX} 日期格式錯誤 ({date_str})，應為 YYYY-MM-DD。") # 更友好的提示
-
-        # 如果 LLM 回傳的 hour 不是 06:00 或 18:00，做合理的時段轉換
-        if hour and isinstance(hour, str) and hour not in ["06:00", "18:00"]: # 檢查 hour 是否有效
-            try:
-                hour_parts = hour.split(":")
-                hour_int = int(hour_parts[0])
-                if 0 <= hour_int <= 2:
-                    target_date = target_date - timedelta(days=1)
-                    hour = "18:00"
-                elif 3 <= hour_int < 17:
-                    hour = "06:00"
-                else:
-                    hour = "18:00"
-            except Exception: # 若轉換失敗，使用預設
-                hour = "06:00"
-        elif not hour: # 如果 hour 是 None 或空字串
-             hour = "06:00"
-
-
-        raw_data = fetch_forecast_data(
-            area,
-            city,
-            target_date=target_date,
-            target_hour=hour
-        )
-    else:
-        return _make_safe(f"{ERROR_PREFIX} 無法辨識查詢類型 (應為 'radar' 或 'forecast')。LLM 回應 type: {query_type or '未提供'}") # 更友好的提示
-
-    # 3. 如果 fetch 天氣時有錯誤，直接回傳
-    if raw_data.startswith((WARN_PREFIX, ERROR_PREFIX)):
-        return raw_data
-
-    # 3.5 取得即時外部資料 (RAG)：local radar summary 與 Open-Meteo 即時天氣
-    # 這些資料會併入 raw_data 作為 LLM 的上下文，提升回覆的即時性
-    try:
-        radar_summary = get_latest_radar_summary()
-        raw_data = f"[RAG - 本機雷達摘要]\n{radar_summary}\n\n" + raw_data
-    except Exception:
-        pass
-    try:
-        # 優先以 area+city 查 district_coords 取得即時天氣座標
-        current_weather_summary = fetch_current_weather_open_meteo(area=area, city=city)
-        raw_data = f"[RAG - 即時天氣]\n{current_weather_summary}\n\n" + raw_data
-    except Exception:
-        pass
-
-    # 4. 抓取景點與住宿清單（優先語意檢索，含真正的description），並拼接到 raw_data
-    attractions_list = _get_places_for_area(user_prompt, area, city, "attraction", top_n=5)
-    if attractions_list:
-        raw_data += "\n\n🏞️ 此區推薦景點：\n"
-        for idx, name in enumerate(attractions_list, start=1):
-            raw_data += f"  {idx}. {name}\n" # 修正縮排
-    else:
-        raw_data += f"\n\n🏞️ 抱歉，目前沒有「{area}」的景點資料可供推薦。\n"
-
-    lodgings_list = _get_places_for_area(user_prompt, area, city, "lodging", top_n=3)
-    if lodgings_list:
-        raw_data += "\n\n🏨 此區推薦住宿：\n"
-        for idx, name in enumerate(lodgings_list, start=1):
-            raw_data += f"  {idx}. {name}\n" # 修正縮排
-    else:
-        raw_data += f"\n\n🏨 抱歉，目前沒有「{area}」的住宿資料可供推薦。\n"
-
-    # 5. 一併把「天氣 + 景點 + 住宿」送給 LLM 生成最終回覆
-    start_time = time.time()
-    generated_summary = generate_answer_from_user_prompt_and_data(user_prompt, raw_data)
-    elapsed = time.time() - start_time
-    
-    # 這裡只回傳 LLM 的建議，不包含 system.py 自身的 CCTV 列表
-    llm_response_with_header = f"回應建議（回應耗時 {elapsed:.2f} 秒）：\n{generated_summary}"
-    # 返回給呼叫端時，使用 _make_safe 以避免在某些終端或日誌系統發生編碼錯誤
-    return _make_safe(llm_response_with_header)
+    return weather_graph.run_weather_graph(
+        sys.modules[__name__], user_prompt, area_override, city_override
+    )
 
 if __name__ == "__main__":
     print(_make_safe("台中天氣小幫手，輸入你想查詢的內容吧（輸入 exit 離開）\n"))

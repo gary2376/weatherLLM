@@ -12,6 +12,7 @@ import importlib
 import json
 
 import repository
+import orchestrator
 
 # 全域顯示前的 sanitizer，確保傳給 Streamlit 的一定是可顯示的字串
 def sanitize_for_display(content) -> str:
@@ -414,102 +415,20 @@ def main():
 
         if user_input:
             st.session_state.chat_messages.append({"role": "user", "content": user_input})
-            
-            system_py_main_response = ""
-            streamlit_chatbot_text_part = "" 
-            
-            # 1. Streamlit 內部機器人處理，獲取地圖資料、CCTV列表、初步文字和查詢類型
-            with st.spinner("正在分析您的請求..."):
-                # 不再使用側欄覆寫，改為讓使用者在 prompt 中直接提及行政區
-                sl_resp_text, sl_cctv_names, sl_attr_df, sl_query_type = \
-                    st.session_state.chatbot.process_message(user_input)
-            
-            st.session_state.highlighted_cctvs = sl_cctv_names
-            st.session_state.recommended_attractions_on_map = sl_attr_df
 
-            # --- MODIFIED: 判斷是否為天氣相關查詢以呼叫 system.py ---
-            should_call_system_py = False
-            temp_marker = None
-            # 檢查是否包含一般天氣關鍵字 (如 "天氣", "氣象")
-            if hasattr(st.session_state.chatbot, 'general_weather_query_keywords') and \
-               any(gkw in user_input for gkw in st.session_state.chatbot.general_weather_query_keywords):
-                should_call_system_py = True
-            
-            # 如果還不是，再檢查是否包含特定天氣現象關鍵字 (如 "下雨", "晴朗")
-            if not should_call_system_py and \
-               hasattr(st.session_state.chatbot, 'weather_phenomenon_keywords') and \
-               any(pkw in user_input.lower() for pkw in st.session_state.chatbot.weather_phenomenon_keywords.keys()): # 注意這裡用 .keys()
-                should_call_system_py = True
-            # --- END MODIFIED ---
+            sel_dist = st.session_state.get('selected_district_final')
 
-            # Helper: 偵測回傳是否看起來像機器格式 (JSON / list / null 等)
-            def _is_machine_format(content):
-                try:
-                    if content is None:
-                        return True
-                    if not isinstance(content, str):
-                        return True
-                    s = content.strip()
-                    if not s:
-                        return True
-                    low = s.lower()
-                    # 明顯的 JSON 結構或包含 null/none
-                    if low.startswith('[') or low.startswith('{'):
-                        if 'null' in low or 'none' in low or ',' in s:
-                            return True
-                        return True
-                    # 有時候回傳會是 Python-list/string repr
-                    if s.startswith('[') and ']' in s:
-                        return True
-                    # 含有多個逗號且沒有中文，可能是 machine repr
-                    if s.count(',') >= 2 and all(ord(ch) < 128 for ch in s if ch.isalpha()):
-                        return True
-                except Exception:
-                    return True
-                return False
+            # 是否要走 OpenAI 進階建議路徑：跟 orchestrator.supervisor_node 內部
+            # 用的是同一份 chatbot 關鍵字表，這裡先問一次純粹是為了決定要不要跳
+            # st.warning 提示使用者缺 API Key（UI 層決定），不是重複算一次要花
+            # 錢的東西——supervisor_node 本身不打任何外部 API。
+            should_call_advanced_preview = orchestrator.supervisor_node(
+                {"user_input": user_input, "chatbot": st.session_state.chatbot}
+            )["should_call_advanced"]
 
-            def _sanitize_system_response(content):
-                # 對 system.py 回傳做友善處理，避免把 raw JSON/NULL 列表直接顯示給使用者。
-                fallback = "抱歉，進階建議系統暫時無法提供可讀回覆，請稍後或調整查詢內容。"
-                try:
-                    if content is None:
-                        return fallback
-                    if not isinstance(content, str):
-                        # 嘗試轉換簡單型別
-                        try:
-                            import json
-                            return json.dumps(content, ensure_ascii=False)
-                        except Exception:
-                            return fallback
-                    # 如果看起來像 machine format，嘗試解析 JSON 並抽取可讀文字
-                    if _is_machine_format(content):
-                        try:
-                            import json
-                            parsed = json.loads(content)
-                            if isinstance(parsed, list):
-                                for item in parsed:
-                                    if isinstance(item, str) and item.strip():
-                                        return item
-                                return fallback
-                            if isinstance(parsed, dict):
-                                for k in ('text', 'content', 'message'):
-                                    if k in parsed and isinstance(parsed[k], str):
-                                        return parsed[k]
-                                return json.dumps(parsed, ensure_ascii=False)
-                        except Exception:
-                            # 簡單清理一些常見 tokens
-                            s = content.replace('[', '').replace(']', '').replace('null', '').replace('None', '').strip()
-                            if s:
-                                return s
-                            return fallback
-                    return content
-                except Exception:
-                    return fallback
-
-            # 2. 如果是天氣相關查詢且 system.py 可用，則在已設定 API Key 的情況下呼叫 system.py
-            if should_call_system_py and SYSTEM_PY_AVAILABLE:
+            api_key_available = False
+            if should_call_advanced_preview and SYSTEM_PY_AVAILABLE:
                 # 確認是否有 API Key：優先使用 system_module.openai.api_key -> session_state -> 環境變數
-                api_key_available = False
                 try:
                     if system_module is not None and hasattr(system_module, 'openai') and getattr(system_module.openai, 'api_key', None):
                         api_key_available = True
@@ -527,89 +446,27 @@ def main():
 
                 if not api_key_available:
                     st.warning("要使用進階天氣建議功能，請先在左側輸入您的 OpenAI API Key（private）。")
-                else:
-                    # 如果使用者在側欄選了行政區，將其作為覆寫參數傳給 system.get_weather_data
-                    sel_dist = st.session_state.get('selected_district_final')
-                    # 在 UI 先插入佔位訊息，避免在等待期間或失敗時顯示 raw machine output
-                    temp_marker = "（系統）正在向 OpenAI 查詢天氣與綜合建議，請稍候..."
-                    st.session_state.chat_messages.append({"role": "assistant", "content": temp_marker})
-                    with st.spinner("正在向 OpenAI 查詢天氣與綜合建議..."):
-                        try:
-                            # 傳遞 user_input 與可選的區域覆寫給 system.py
-                            system_py_main_response = get_system_weather_data(user_input, sel_dist)
-                        except Exception as e:
-                            st.error(f"呼叫 system.py 時發生錯誤: {e}")
-                            system_py_main_response = "抱歉，OpenAI 進階建議系統暫時無法服務。"
-                    # 對 system 回傳做清理與友善化處理，避免直接顯示 JSON/NULL
-                    try:
-                        system_py_main_response = _sanitize_system_response(system_py_main_response)
-                    except Exception:
-                        system_py_main_response = "抱歉，進階建議系統暫時無法提供可讀回覆。"
-            
-            # 3. 組合最終顯示的聊天回應
-            final_response_elements = []
 
-            if system_py_main_response: # 如果 system.py 有回應，將其作為主要內容
-                final_response_elements.append(system_py_main_response)
-            
-            # 如果 system.py 未被呼叫或呼叫失敗，且 Streamlit 內部機器人有關於景點/餐廳/住宿的回應，則使用它
-            # sl_query_type 來自 Streamlit 內部機器人的判斷
-            if not system_py_main_response or "錯誤：" in system_py_main_response or "無法導入" in system_py_main_response:
-                if sl_query_type in ["attraction", "restaurant", "hotel"]:
-                    # sanitize sl_resp_text before using
-                    safe_sl_resp = _sanitize_system_response(sl_resp_text) if sl_resp_text is not None else None
-                    if safe_sl_resp and ("建議關注的旅遊景點：" in safe_sl_resp or "為您找到以下位於" in safe_sl_resp):
-                        # 避免重複添加，檢查 final_response_elements 是否已包含類似內容 (這裡簡化，直接添加)
-                        if not any("建議關注的旅遊景點：" in str(part) for part in final_response_elements) and \
-                           not any("為您找到以下位於" in str(part) for part in final_response_elements):
-                           final_response_elements.append(safe_sl_resp)
-                else:
-                    # 非景點類型或 fallback，確保 sl_resp_text 是可讀字串再加入
-                    safe_sl_resp = _sanitize_system_response(sl_resp_text) if sl_resp_text is not None else None
-                    if safe_sl_resp and not final_response_elements:
-                        final_response_elements.append(safe_sl_resp)
+            # LangGraph supervisor + 兩個 worker（WeatherChatbot 輕量路徑／system.py
+            # OpenAI 進階路徑）+ 組合節點，取代原本這裡一大段手動 if/else 拼接。
+            # 見 ROADMAP.md Phase 2、code/orchestrator.py。
+            with st.spinner("正在處理您的請求..."):
+                result = orchestrator.run_orchestrator(
+                    user_input=user_input,
+                    chatbot=st.session_state.chatbot,
+                    system_weather_fn=lambda prompt, override: get_system_weather_data(prompt, override),
+                    override_district=sel_dist,
+                    api_key_available=api_key_available and SYSTEM_PY_AVAILABLE,
+                    show_all_cctvs=st.session_state.get('show_all_cctvs_checkbox_value', False),
+                )
 
+            st.session_state.highlighted_cctvs = result.get("sl_cctv_names") or []
+            st.session_state.recommended_attractions_on_map = result.get("sl_attr_df")
 
-            if not final_response_elements: # 最終的備援訊息
-                 final_response_elements.append("抱歉，目前無法處理您的請求，請再試一次或調整您的問題。")
+            final_display_text = result.get("final_display_text") or \
+                "抱歉，目前無法處理您的請求，請再試一次或調整您的問題。"
 
-            # 4. 附加 Streamlit 這邊生成的 CCTV 列表和圖例 (總是執行，除非 sl_cctv_names 為空)
-            if sl_cctv_names:
-                cctv_legend_text = "\n\n**🎯 建議關注的監視器位置：** (地圖上紅色圖釘標記)"
-                if st.session_state.get('show_all_cctvs_checkbox_value', False):
-                    cctv_legend_text += " 其他監視器以藍色相機標記。"
-                final_response_elements.append(cctv_legend_text) 
-                
-                cctv_list_for_display = []
-                for i, cctv_name in enumerate(sl_cctv_names[:5], 1):
-                    cctv_list_for_display.append(f"{i}. {cctv_name}")
-                if len(sl_cctv_names) > 5:
-                    cctv_list_for_display.append(f"...以及其他 {len(sl_cctv_names) - 5} 個位置")
-                final_response_elements.append("\n".join(cctv_list_for_display))
-
-            final_display_text = "\n".join(filter(None, final_response_elements)).strip() # 移除開頭可能多餘的換行
-
-            # 如果最終顯示文字僅為空字串或只有空白，改為友善的備援訊息，避免在 UI 顯示空白訊息
-            if not final_display_text or not final_display_text.strip():
-                final_display_text = "抱歉，進階建議系統暫時無法提供內容，請稍後或調整查詢。"
-
-            # 如果之前插入了 temp_marker，嘗試以最終回覆取代該佔位訊息，避免重複訊息
-            try:
-                if temp_marker:
-                    replaced = False
-                    for i in range(len(st.session_state.chat_messages) - 1, -1, -1):
-                        if st.session_state.chat_messages[i].get("role") == "assistant" and st.session_state.chat_messages[i].get("content") == temp_marker:
-                            st.session_state.chat_messages[i]["content"] = final_display_text
-                            replaced = True
-                            break
-                    if not replaced:
-                        st.session_state.chat_messages.append({"role": "assistant", "content": final_display_text})
-                else:
-                    st.session_state.chat_messages.append({"role": "assistant", "content": final_display_text})
-            except Exception:
-                # 如果對 session_state 操作失敗，退回到直接 append 的保險作法
-                st.session_state.chat_messages.append({"role": "assistant", "content": final_display_text})
-
+            st.session_state.chat_messages.append({"role": "assistant", "content": final_display_text})
             st.rerun()
 
     with col1: # 地圖顯示部分 (與前一版本相同)
