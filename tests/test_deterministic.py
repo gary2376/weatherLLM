@@ -17,6 +17,7 @@ import system  # noqa: E402
 import repository  # noqa: E402
 import attraction_classes  # noqa: E402
 import fetch_tourism  # noqa: E402
+import streamlit_app  # noqa: E402
 
 
 def test_wants_indoor_detects_rain_keywords():
@@ -92,6 +93,31 @@ def test_query_attractions_city_disambiguates_same_district_name(fixture_db):
 def test_get_attractions_for_area_returns_name_list(fixture_db):
     names = repository.get_attractions_for_area("西屯區", top_n=5, city="臺中市")
     assert names == ["某景點"]
+
+
+def test_rate_limit_allows_requests_under_the_cap():
+    now = 1000.0
+    timestamps = []
+    for _ in range(streamlit_app.RATE_LIMIT_MAX_REQUESTS):
+        allowed, timestamps = streamlit_app._rate_limit_check(timestamps, now)
+        assert allowed is True
+
+
+def test_rate_limit_blocks_request_over_the_cap():
+    now = 1000.0
+    timestamps = []
+    for _ in range(streamlit_app.RATE_LIMIT_MAX_REQUESTS):
+        _, timestamps = streamlit_app._rate_limit_check(timestamps, now)
+    allowed, timestamps = streamlit_app._rate_limit_check(timestamps, now)
+    assert allowed is False
+
+
+def test_rate_limit_forgets_requests_outside_the_window():
+    now = 1000.0
+    timestamps = [now - streamlit_app.RATE_LIMIT_WINDOW_SECONDS - 1] * streamlit_app.RATE_LIMIT_MAX_REQUESTS
+    allowed, timestamps = streamlit_app._rate_limit_check(timestamps, now)
+    assert allowed is True
+    assert len(timestamps) == 1
 
 
 # _is_machine_like() 原本是 generate_answer_from_user_prompt_and_data() 內部的

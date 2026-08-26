@@ -10,6 +10,7 @@ import pygeohash as pgh
 import os
 import importlib
 import json
+import time
 
 import repository
 import orchestrator
@@ -50,6 +51,23 @@ try:
 except Exception:
     system_module = None
 # ---- END 新增 ----
+
+# 系統邊界（見 ROADMAP.md Phase 4）：擋掉單一瀏覽器 session 短時間內狂刷，避免
+# 有人把 RAG/embedding 運算或 Open-Meteo/OpenAI 呼叫當免費算力濫用。用
+# session 而不是 IP：Streamlit 公開 API 拿不到可靠的 visitor IP，對個人 side
+# project 的免費方案資源保護（擋單一使用者狂刷，不是防範分散式濫用）已經夠用。
+RATE_LIMIT_MAX_REQUESTS = 10
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+def _rate_limit_check(timestamps: List[float], now: float) -> Tuple[bool, List[float]]:
+    """純函式，不碰 st.session_state，方便直接測試；呼叫端負責讀寫
+    session_state。回傳 (是否允許這次請求, 更新後的 timestamps)。"""
+    recent = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW_SECONDS]
+    if len(recent) >= RATE_LIMIT_MAX_REQUESTS:
+        return False, recent
+    recent.append(now)
+    return True, recent
 
 
 # 請確認您已安裝 pygeohash: pip install pygeohash
@@ -414,7 +432,19 @@ def main():
         user_input = st.chat_input("請問您想了解什麼天氣或景點資訊？")
 
         if user_input:
+            allowed, updated_timestamps = _rate_limit_check(
+                st.session_state.get('_request_timestamps', []), time.time()
+            )
+            st.session_state['_request_timestamps'] = updated_timestamps
+
             st.session_state.chat_messages.append({"role": "user", "content": user_input})
+
+            if not allowed:
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
+                    "content": f"請求太頻繁，請稍候再試（{RATE_LIMIT_WINDOW_SECONDS} 秒內最多 {RATE_LIMIT_MAX_REQUESTS} 次），避免佔用免費方案資源。",
+                })
+                st.rerun()
 
             sel_dist = st.session_state.get('selected_district_final')
 
