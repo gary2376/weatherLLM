@@ -3,10 +3,12 @@
 live eval在 eval/ 底下，走 .github/workflows/nightly-eval.yml 手動/排程觸發，
 不塞進這裡——見 ROADMAP.md Phase 5「eval分兩層」決策。
 """
+import json
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -93,6 +95,101 @@ def test_query_attractions_city_disambiguates_same_district_name(fixture_db):
 def test_get_attractions_for_area_returns_name_list(fixture_db):
     names = repository.get_attractions_for_area("西屯區", top_n=5, city="臺中市")
     assert names == ["某景點"]
+
+
+@pytest.fixture
+def fixture_district_coords_db(tmp_path, monkeypatch):
+    """小型合成district_coords表，測`get_district_coords()`的查詢/備援邏輯，
+    不是真的travel.db。"""
+    db_path = tmp_path / "fixture_coords.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE district_coords (city TEXT, district TEXT, latitude REAL, longitude REAL, sample_count INTEGER)"
+    )
+    conn.execute("INSERT INTO district_coords VALUES ('彰化縣','彰化市',24.08,120.54,10)")
+    conn.execute("INSERT INTO district_coords VALUES ('彰化縣','鹿港鎮',24.06,120.43,10)")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(repository, "DB_PATH", db_path)
+    return db_path
+
+
+def test_get_district_coords_recovers_from_concatenated_city_name(fixture_district_coords_db):
+    """LLM有時候會把「彰化市」誤判成「彰化縣彰化市」——這種黏在一起的字串精確查詢
+    會落空，也不該直接退回預設座標，應該從裡面找出真實存在的縣市名稱重查一次。"""
+    coords = repository.get_district_coords("彰化縣彰化市", "彰化市")
+    assert coords == (24.08, 120.54)
+
+
+def test_get_district_coords_returns_none_when_city_truly_unrecognized(fixture_district_coords_db):
+    assert repository.get_district_coords("不存在的縣市", "不存在的區") is None
+
+
+def test_resolve_unique_city_for_district_returns_unique_match(fixture_district_coords_db):
+    assert repository.resolve_unique_city_for_district("鹿港鎮") == "彰化縣"
+
+
+def test_resolve_unique_city_for_district_none_when_ambiguous_or_unknown(fixture_district_coords_db):
+    conn = sqlite3.connect(fixture_district_coords_db)
+    conn.execute("INSERT INTO district_coords VALUES ('臺北市','中山區',25.06,121.52,10)")
+    conn.execute("INSERT INTO district_coords VALUES ('基隆市','中山區',25.13,121.74,10)")
+    conn.commit()
+    conn.close()
+    assert repository.resolve_unique_city_for_district("中山區") is None
+    assert repository.resolve_unique_city_for_district("不存在的區") is None
+
+
+class _FakeChatResponse:
+    def __init__(self, content: str):
+        self.choices = [SimpleNamespace(message=SimpleNamespace(content=content))]
+
+
+def test_analyze_prompt_computes_relative_date_in_code(monkeypatch):
+    """大後天這種相對日期，Phase 6 eval發現LLM自己算常常算錯（+2天當成+3天）——
+    改成LLM只回傳relative_day_offset分類，實際日期用timedelta在程式碼裡算，不
+    信任LLM自己的日期算術。"""
+    fake_json = json.dumps({
+        "type": "forecast", "city": "臺中市", "area": "西屯區", "relative_day_offset": 3,
+    })
+    monkeypatch.setattr(system, "_create_chat_completion", lambda *a, **k: _FakeChatResponse(fake_json))
+    info = system.analyze_prompt_with_llm("大後天西屯區天氣如何")
+    expected_date = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d")
+    assert info["date"] == expected_date
+    assert "relative_day_offset" not in info
+
+
+def test_analyze_prompt_corrects_city_for_unique_district(monkeypatch, fixture_district_coords_db):
+    """LLM把只存在單一縣市的冷門行政區猜成別的縣市時，用查表結果校正，不信任
+    LLM對冷門鄉鎮的世界知識。"""
+    fake_json = json.dumps({"type": "radar", "city": "臺中市", "area": "鹿港鎮"})
+    monkeypatch.setattr(system, "_create_chat_completion", lambda *a, **k: _FakeChatResponse(fake_json))
+    info = system.analyze_prompt_with_llm("鹿港鎮現在天氣如何")
+    assert info["city"] == "彰化縣"
+
+
+def test_analyze_prompt_moves_county_administered_city_from_city_to_area(monkeypatch, fixture_district_coords_db):
+    """LLM有時候把「彰化市」這種縣轄市整個塞進city欄位、area留空（沒拆成
+    city=彰化縣/area=彰化市）——city本身如果剛好是全台唯一對應一個上級縣的行政區
+    名稱，就該當作area處理。"""
+    fake_json = json.dumps({"type": "radar", "city": "彰化市"})
+    monkeypatch.setattr(system, "_create_chat_completion", lambda *a, **k: _FakeChatResponse(fake_json))
+    info = system.analyze_prompt_with_llm("彰化市的天氣")
+    assert info["city"] == "彰化縣"
+    assert info["area"] == "彰化市"
+
+
+def test_analyze_prompt_does_not_override_ambiguous_district_city(monkeypatch, fixture_district_coords_db):
+    """同名跨縣市的行政區（例如中山區）查表結果不唯一，保留LLM自己的判斷，不亂
+    覆寫——LLM可能從問句上下文看出真正的縣市。"""
+    conn = sqlite3.connect(fixture_district_coords_db)
+    conn.execute("INSERT INTO district_coords VALUES ('臺北市','中山區',25.06,121.52,10)")
+    conn.execute("INSERT INTO district_coords VALUES ('基隆市','中山區',25.13,121.74,10)")
+    conn.commit()
+    conn.close()
+    fake_json = json.dumps({"type": "radar", "city": "基隆市", "area": "中山區"})
+    monkeypatch.setattr(system, "_create_chat_completion", lambda *a, **k: _FakeChatResponse(fake_json))
+    info = system.analyze_prompt_with_llm("中山區現在天氣如何")
+    assert info["city"] == "基隆市"
 
 
 def test_rate_limit_allows_requests_under_the_cap():

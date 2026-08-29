@@ -1,22 +1,1672 @@
 [
-  {"query": "西屯區現在在下雨嗎", "type": "radar", "city": "臺中市", "area": "西屯區"},
-  {"query": "北屯區等一下的天氣如何", "type": "radar", "city": "臺中市", "area": "北屯區"},
-  {"query": "高雄市前鎮區現在天氣怎樣", "type": "radar", "city": "高雄市", "area": "前鎮區"},
-  {"query": "台北市大安區這時候會不會下雨", "type": "radar", "city": "臺北市", "area": "大安區"},
-  {"query": "台南中西區目前的天氣狀況", "type": "radar", "city": "臺南市", "area": "中西區"},
-  {"query": "西屯區明天天氣如何", "type": "forecast", "city": "臺中市", "area": "西屯區", "date_offset_days": 1},
-  {"query": "後天北屯區會下雨嗎", "type": "forecast", "city": "臺中市", "area": "北屯區", "date_offset_days": 2},
-  {"query": "高雄前鎮區明天要不要帶傘", "type": "forecast", "city": "高雄市", "area": "前鎮區", "date_offset_days": 1},
-  {"query": "台北大安區這個週末天氣好嗎", "type": "forecast", "city": "臺北市", "area": "大安區"},
-  {"query": "新竹市東區明天早上天氣如何", "type": "forecast", "city": "新竹市", "area": "東區", "date_offset_days": 1, "hour": "06:00"},
-  {"query": "台南中西區明天晚上會不會下雨", "type": "forecast", "city": "臺南市", "area": "中西區", "date_offset_days": 1, "hour": "18:00"},
-  {"query": "宜蘭礁溪鄉明天天氣", "type": "forecast", "city": "宜蘭縣", "area": "礁溪鄉", "date_offset_days": 1},
-  {"query": "去赤崁樓玩，那邊現在天氣如何", "type": "radar", "city": "臺南市", "area": "中西區"},
-  {"query": "西屯區的天氣", "type": "radar", "city": "臺中市", "area": "西屯區"},
-  {"query": "西屯區後天下午的天氣", "type": "forecast", "city": "臺中市", "area": "西屯區", "date_offset_days": 2},
-  {"query": "南屯區現在天氣好嗎", "type": "radar", "city": "臺中市", "area": "南屯區"},
-  {"query": "屏東恆春鎮明天天氣", "type": "forecast", "city": "屏東縣", "area": "恆春鎮", "date_offset_days": 1},
-  {"query": "花蓮吉安鄉現在會下雨嗎", "type": "radar", "city": "花蓮縣", "area": "吉安鄉"},
-  {"query": "台中豐原區明天天氣如何", "type": "forecast", "city": "臺中市", "area": "豐原區", "date_offset_days": 1},
-  {"query": "南投埔里鎮現在的天氣", "type": "radar", "city": "南投縣", "area": "埔里鎮"}
+  {
+    "query": "西屯區現在在下雨嗎",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "西屯區"
+  },
+  {
+    "query": "北屯區等一下的天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "北屯區"
+  },
+  {
+    "query": "高雄市前鎮區現在天氣怎樣",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "前鎮區"
+  },
+  {
+    "query": "台北市大安區這時候會不會下雨",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "大安區"
+  },
+  {
+    "query": "台南中西區目前的天氣狀況",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "中西區"
+  },
+  {
+    "query": "西屯區明天天氣如何",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "西屯區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "後天北屯區會下雨嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "北屯區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "高雄前鎮區明天要不要帶傘",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "前鎮區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "台北大安區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "大安區"
+  },
+  {
+    "query": "新竹市東區明天早上天氣如何",
+    "type": "forecast",
+    "city": "新竹市",
+    "area": "東區",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "台南中西區明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "中西區",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "宜蘭礁溪鄉明天天氣",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "礁溪鄉",
+    "date_offset_days": 1
+  },
+  {
+    "query": "去赤崁樓玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "中西區"
+  },
+  {
+    "query": "西屯區的天氣",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "西屯區"
+  },
+  {
+    "query": "西屯區後天下午的天氣",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "西屯區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "南屯區現在天氣好嗎",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "南屯區"
+  },
+  {
+    "query": "屏東恆春鎮明天天氣",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "恆春鎮",
+    "date_offset_days": 1
+  },
+  {
+    "query": "花蓮吉安鄉現在會下雨嗎",
+    "type": "radar",
+    "city": "花蓮縣",
+    "area": "吉安鄉"
+  },
+  {
+    "query": "台中豐原區明天天氣如何",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "豐原區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "南投埔里鎮現在的天氣",
+    "type": "radar",
+    "city": "南投縣",
+    "area": "埔里鎮"
+  },
+  {
+    "query": "臺北市中山區現在在下雨嗎",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "中山區"
+  },
+  {
+    "query": "臺北市信義區現在天氣怎樣",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "信義區"
+  },
+  {
+    "query": "士林區等一下的天氣如何",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "士林區"
+  },
+  {
+    "query": "文山區這時候會不會下雨",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "文山區"
+  },
+  {
+    "query": "北投區目前的天氣狀況",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "北投區"
+  },
+  {
+    "query": "松山區的天氣",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "松山區"
+  },
+  {
+    "query": "新北市板橋區現在天氣好嗎",
+    "type": "radar",
+    "city": "新北市",
+    "area": "板橋區"
+  },
+  {
+    "query": "現在新北市淡水區會很熱嗎",
+    "type": "radar",
+    "city": "新北市",
+    "area": "淡水區"
+  },
+  {
+    "query": "三峽區即時天氣",
+    "type": "radar",
+    "city": "新北市",
+    "area": "三峽區"
+  },
+  {
+    "query": "新北市瑞芳區現在在下雨嗎",
+    "type": "radar",
+    "city": "新北市",
+    "area": "瑞芳區"
+  },
+  {
+    "query": "新北市烏來區現在天氣怎樣",
+    "type": "radar",
+    "city": "新北市",
+    "area": "烏來區"
+  },
+  {
+    "query": "基隆市中正區現在天氣好嗎",
+    "type": "radar",
+    "city": "基隆市",
+    "area": "中正區"
+  },
+  {
+    "query": "七堵區這時候會不會下雨",
+    "type": "radar",
+    "city": "基隆市",
+    "area": "七堵區"
+  },
+  {
+    "query": "暖暖區目前的天氣狀況",
+    "type": "radar",
+    "city": "基隆市",
+    "area": "暖暖區"
+  },
+  {
+    "query": "桃園區的天氣",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "桃園區"
+  },
+  {
+    "query": "桃園市中壢區現在天氣好嗎",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "中壢區"
+  },
+  {
+    "query": "現在桃園市大溪區會很熱嗎",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "大溪區"
+  },
+  {
+    "query": "復興區即時天氣",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "復興區"
+  },
+  {
+    "query": "現在新竹市北區會很熱嗎",
+    "type": "radar",
+    "city": "新竹市",
+    "area": "北區"
+  },
+  {
+    "query": "新竹市香山區現在天氣怎樣",
+    "type": "radar",
+    "city": "新竹市",
+    "area": "香山區"
+  },
+  {
+    "query": "竹北市等一下的天氣如何",
+    "type": "radar",
+    "city": "新竹縣",
+    "area": "竹北市"
+  },
+  {
+    "query": "尖石鄉這時候會不會下雨",
+    "type": "radar",
+    "city": "新竹縣",
+    "area": "尖石鄉"
+  },
+  {
+    "query": "關西鎮目前的天氣狀況",
+    "type": "radar",
+    "city": "新竹縣",
+    "area": "關西鎮"
+  },
+  {
+    "query": "苗栗市的天氣",
+    "type": "radar",
+    "city": "苗栗縣",
+    "area": "苗栗市"
+  },
+  {
+    "query": "苗栗縣通霄鎮現在天氣好嗎",
+    "type": "radar",
+    "city": "苗栗縣",
+    "area": "通霄鎮"
+  },
+  {
+    "query": "現在苗栗縣泰安鄉會很熱嗎",
+    "type": "radar",
+    "city": "苗栗縣",
+    "area": "泰安鄉"
+  },
+  {
+    "query": "西屯區即時天氣",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "西屯區"
+  },
+  {
+    "query": "臺中市北屯區現在在下雨嗎",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "北屯區"
+  },
+  {
+    "query": "臺中市豐原區現在天氣怎樣",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "豐原區"
+  },
+  {
+    "query": "大甲區等一下的天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "大甲區"
+  },
+  {
+    "query": "和平區這時候會不會下雨",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "和平區"
+  },
+  {
+    "query": "梧棲區目前的天氣狀況",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "梧棲區"
+  },
+  {
+    "query": "彰化市的天氣",
+    "type": "radar",
+    "city": "彰化縣",
+    "area": "彰化市"
+  },
+  {
+    "query": "彰化縣鹿港鎮現在天氣好嗎",
+    "type": "radar",
+    "city": "彰化縣",
+    "area": "鹿港鎮"
+  },
+  {
+    "query": "現在彰化縣田尾鄉會很熱嗎",
+    "type": "radar",
+    "city": "彰化縣",
+    "area": "田尾鄉"
+  },
+  {
+    "query": "埔里鎮即時天氣",
+    "type": "radar",
+    "city": "南投縣",
+    "area": "埔里鎮"
+  },
+  {
+    "query": "南投縣仁愛鄉現在在下雨嗎",
+    "type": "radar",
+    "city": "南投縣",
+    "area": "仁愛鄉"
+  },
+  {
+    "query": "南投縣竹山鎮現在天氣怎樣",
+    "type": "radar",
+    "city": "南投縣",
+    "area": "竹山鎮"
+  },
+  {
+    "query": "斗六市等一下的天氣如何",
+    "type": "radar",
+    "city": "雲林縣",
+    "area": "斗六市"
+  },
+  {
+    "query": "北港鎮這時候會不會下雨",
+    "type": "radar",
+    "city": "雲林縣",
+    "area": "北港鎮"
+  },
+  {
+    "query": "臺西鄉目前的天氣狀況",
+    "type": "radar",
+    "city": "雲林縣",
+    "area": "臺西鄉"
+  },
+  {
+    "query": "嘉義市東區現在在下雨嗎",
+    "type": "radar",
+    "city": "嘉義市",
+    "area": "東區"
+  },
+  {
+    "query": "嘉義市西區現在天氣怎樣",
+    "type": "radar",
+    "city": "嘉義市",
+    "area": "西區"
+  },
+  {
+    "query": "現在嘉義縣朴子市會很熱嗎",
+    "type": "radar",
+    "city": "嘉義縣",
+    "area": "朴子市"
+  },
+  {
+    "query": "阿里山鄉即時天氣",
+    "type": "radar",
+    "city": "嘉義縣",
+    "area": "阿里山鄉"
+  },
+  {
+    "query": "臺南市中西區現在在下雨嗎",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "中西區"
+  },
+  {
+    "query": "臺南市安平區現在天氣怎樣",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "安平區"
+  },
+  {
+    "query": "永康區等一下的天氣如何",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "永康區"
+  },
+  {
+    "query": "麻豆區這時候會不會下雨",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "麻豆區"
+  },
+  {
+    "query": "七股區目前的天氣狀況",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "七股區"
+  },
+  {
+    "query": "前鎮區的天氣",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "前鎮區"
+  },
+  {
+    "query": "高雄市左營區現在天氣好嗎",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "左營區"
+  },
+  {
+    "query": "現在高雄市旗津區會很熱嗎",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "旗津區"
+  },
+  {
+    "query": "美濃區即時天氣",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "美濃區"
+  },
+  {
+    "query": "高雄市岡山區現在在下雨嗎",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "岡山區"
+  },
+  {
+    "query": "屏東縣屏東市現在天氣怎樣",
+    "type": "radar",
+    "city": "屏東縣",
+    "area": "屏東市"
+  },
+  {
+    "query": "恆春鎮等一下的天氣如何",
+    "type": "radar",
+    "city": "屏東縣",
+    "area": "恆春鎮"
+  },
+  {
+    "query": "琉球鄉這時候會不會下雨",
+    "type": "radar",
+    "city": "屏東縣",
+    "area": "琉球鄉"
+  },
+  {
+    "query": "霧臺鄉目前的天氣狀況",
+    "type": "radar",
+    "city": "屏東縣",
+    "area": "霧臺鄉"
+  },
+  {
+    "query": "宜蘭市的天氣",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "宜蘭市"
+  },
+  {
+    "query": "宜蘭縣礁溪鄉現在天氣好嗎",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "礁溪鄉"
+  },
+  {
+    "query": "現在宜蘭縣羅東鎮會很熱嗎",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "羅東鎮"
+  },
+  {
+    "query": "南澳鄉即時天氣",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "南澳鄉"
+  },
+  {
+    "query": "花蓮縣花蓮市現在在下雨嗎",
+    "type": "radar",
+    "city": "花蓮縣",
+    "area": "花蓮市"
+  },
+  {
+    "query": "花蓮縣吉安鄉現在天氣怎樣",
+    "type": "radar",
+    "city": "花蓮縣",
+    "area": "吉安鄉"
+  },
+  {
+    "query": "秀林鄉等一下的天氣如何",
+    "type": "radar",
+    "city": "花蓮縣",
+    "area": "秀林鄉"
+  },
+  {
+    "query": "臺東市這時候會不會下雨",
+    "type": "radar",
+    "city": "臺東縣",
+    "area": "臺東市"
+  },
+  {
+    "query": "成功鎮目前的天氣狀況",
+    "type": "radar",
+    "city": "臺東縣",
+    "area": "成功鎮"
+  },
+  {
+    "query": "蘭嶼鄉的天氣",
+    "type": "radar",
+    "city": "臺東縣",
+    "area": "蘭嶼鄉"
+  },
+  {
+    "query": "澎湖縣馬公市現在天氣好嗎",
+    "type": "radar",
+    "city": "澎湖縣",
+    "area": "馬公市"
+  },
+  {
+    "query": "現在澎湖縣七美鄉會很熱嗎",
+    "type": "radar",
+    "city": "澎湖縣",
+    "area": "七美鄉"
+  },
+  {
+    "query": "金城鎮即時天氣",
+    "type": "radar",
+    "city": "金門縣",
+    "area": "金城鎮"
+  },
+  {
+    "query": "金門縣金湖鎮現在在下雨嗎",
+    "type": "radar",
+    "city": "金門縣",
+    "area": "金湖鎮"
+  },
+  {
+    "query": "連江縣南竿鄉現在天氣怎樣",
+    "type": "radar",
+    "city": "連江縣",
+    "area": "南竿鄉"
+  },
+  {
+    "query": "東引鄉等一下的天氣如何",
+    "type": "radar",
+    "city": "連江縣",
+    "area": "東引鄉"
+  },
+  {
+    "query": "臺北市中山區明天會下雨嗎",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "中山區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "大後天臺北市信義區天氣如何",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "信義區",
+    "date_offset_days": 3
+  },
+  {
+    "query": "後天士林區天氣怎樣",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "士林區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "文山區後天要不要帶傘",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "文山區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天臺北市北投區天氣如何",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "北投區",
+    "date_offset_days": 3
+  },
+  {
+    "query": "松山區明天早上天氣如何",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "松山區",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "板橋區明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "板橋區",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "新北市淡水區後天早上會冷嗎",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "淡水區",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "今天三峽區天氣如何",
+    "type": "radar",
+    "city": "新北市",
+    "area": "三峽區"
+  },
+  {
+    "query": "瑞芳區今天晚上天氣",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "瑞芳區",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "烏來區明天天氣如何",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "烏來區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "基隆市中正區後天早上會冷嗎",
+    "type": "forecast",
+    "city": "基隆市",
+    "area": "中正區",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "後天七堵區天氣怎樣",
+    "type": "forecast",
+    "city": "基隆市",
+    "area": "七堵區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "暖暖區後天要不要帶傘",
+    "type": "forecast",
+    "city": "基隆市",
+    "area": "暖暖區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天桃園市桃園區天氣如何",
+    "type": "forecast",
+    "city": "桃園市",
+    "area": "桃園區",
+    "date_offset_days": 3
+  },
+  {
+    "query": "中壢區明天早上天氣如何",
+    "type": "forecast",
+    "city": "桃園市",
+    "area": "中壢區",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "大溪區明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "桃園市",
+    "area": "大溪區",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "桃園市復興區後天早上會冷嗎",
+    "type": "forecast",
+    "city": "桃園市",
+    "area": "復興區",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "新竹市北區明天會下雨嗎",
+    "type": "forecast",
+    "city": "新竹市",
+    "area": "北區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "香山區今天晚上天氣",
+    "type": "forecast",
+    "city": "新竹市",
+    "area": "香山區",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "竹北市明天天氣如何",
+    "type": "forecast",
+    "city": "新竹縣",
+    "area": "竹北市",
+    "date_offset_days": 1
+  },
+  {
+    "query": "新竹縣尖石鄉明天會下雨嗎",
+    "type": "forecast",
+    "city": "新竹縣",
+    "area": "尖石鄉",
+    "date_offset_days": 1
+  },
+  {
+    "query": "後天關西鎮天氣怎樣",
+    "type": "forecast",
+    "city": "新竹縣",
+    "area": "關西鎮",
+    "date_offset_days": 2
+  },
+  {
+    "query": "苗栗市後天要不要帶傘",
+    "type": "forecast",
+    "city": "苗栗縣",
+    "area": "苗栗市",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天苗栗縣通霄鎮天氣如何",
+    "type": "forecast",
+    "city": "苗栗縣",
+    "area": "通霄鎮",
+    "date_offset_days": 3
+  },
+  {
+    "query": "泰安鄉明天早上天氣如何",
+    "type": "forecast",
+    "city": "苗栗縣",
+    "area": "泰安鄉",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "西屯區明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "西屯區",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "臺中市北屯區後天早上會冷嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "北屯區",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "今天豐原區天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "豐原區"
+  },
+  {
+    "query": "大甲區今天晚上天氣",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "大甲區",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "和平區明天天氣如何",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "和平區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "臺中市梧棲區明天會下雨嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "梧棲區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "後天彰化市天氣怎樣",
+    "type": "forecast",
+    "city": "彰化縣",
+    "area": "彰化市",
+    "date_offset_days": 2
+  },
+  {
+    "query": "鹿港鎮後天要不要帶傘",
+    "type": "forecast",
+    "city": "彰化縣",
+    "area": "鹿港鎮",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天彰化縣田尾鄉天氣如何",
+    "type": "forecast",
+    "city": "彰化縣",
+    "area": "田尾鄉",
+    "date_offset_days": 3
+  },
+  {
+    "query": "埔里鎮明天早上天氣如何",
+    "type": "forecast",
+    "city": "南投縣",
+    "area": "埔里鎮",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "仁愛鄉明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "南投縣",
+    "area": "仁愛鄉",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "南投縣竹山鎮後天早上會冷嗎",
+    "type": "forecast",
+    "city": "南投縣",
+    "area": "竹山鎮",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "今天斗六市天氣如何",
+    "type": "radar",
+    "city": "雲林縣",
+    "area": "斗六市"
+  },
+  {
+    "query": "北港鎮今天晚上天氣",
+    "type": "forecast",
+    "city": "雲林縣",
+    "area": "北港鎮",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "臺西鄉明天天氣如何",
+    "type": "forecast",
+    "city": "雲林縣",
+    "area": "臺西鄉",
+    "date_offset_days": 1
+  },
+  {
+    "query": "大後天嘉義市東區天氣如何",
+    "type": "forecast",
+    "city": "嘉義市",
+    "area": "東區",
+    "date_offset_days": 3
+  },
+  {
+    "query": "嘉義市西區後天早上會冷嗎",
+    "type": "forecast",
+    "city": "嘉義市",
+    "area": "西區",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "朴子市後天要不要帶傘",
+    "type": "forecast",
+    "city": "嘉義縣",
+    "area": "朴子市",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天嘉義縣阿里山鄉天氣如何",
+    "type": "forecast",
+    "city": "嘉義縣",
+    "area": "阿里山鄉",
+    "date_offset_days": 3
+  },
+  {
+    "query": "中西區明天早上天氣如何",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "中西區",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "安平區明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "安平區",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "臺南市永康區後天早上會冷嗎",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "永康區",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "今天麻豆區天氣如何",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "麻豆區"
+  },
+  {
+    "query": "七股區今天晚上天氣",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "七股區",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "前鎮區明天天氣如何",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "前鎮區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "高雄市左營區明天會下雨嗎",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "左營區",
+    "date_offset_days": 1
+  },
+  {
+    "query": "後天旗津區天氣怎樣",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "旗津區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "美濃區後天要不要帶傘",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "美濃區",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天高雄市岡山區天氣如何",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "岡山區",
+    "date_offset_days": 3
+  },
+  {
+    "query": "屏東市明天早上天氣如何",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "屏東市",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "恆春鎮明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "恆春鎮",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "屏東縣琉球鄉後天早上會冷嗎",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "琉球鄉",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "今天霧臺鄉天氣如何",
+    "type": "radar",
+    "city": "屏東縣",
+    "area": "霧臺鄉"
+  },
+  {
+    "query": "宜蘭市今天晚上天氣",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "宜蘭市",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "礁溪鄉明天天氣如何",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "礁溪鄉",
+    "date_offset_days": 1
+  },
+  {
+    "query": "宜蘭縣羅東鎮明天會下雨嗎",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "羅東鎮",
+    "date_offset_days": 1
+  },
+  {
+    "query": "後天南澳鄉天氣怎樣",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "南澳鄉",
+    "date_offset_days": 2
+  },
+  {
+    "query": "花蓮市後天要不要帶傘",
+    "type": "forecast",
+    "city": "花蓮縣",
+    "area": "花蓮市",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天花蓮縣吉安鄉天氣如何",
+    "type": "forecast",
+    "city": "花蓮縣",
+    "area": "吉安鄉",
+    "date_offset_days": 3
+  },
+  {
+    "query": "秀林鄉明天早上天氣如何",
+    "type": "forecast",
+    "city": "花蓮縣",
+    "area": "秀林鄉",
+    "date_offset_days": 1,
+    "hour": "06:00"
+  },
+  {
+    "query": "臺東市明天晚上會不會下雨",
+    "type": "forecast",
+    "city": "臺東縣",
+    "area": "臺東市",
+    "date_offset_days": 1,
+    "hour": "18:00"
+  },
+  {
+    "query": "臺東縣成功鎮後天早上會冷嗎",
+    "type": "forecast",
+    "city": "臺東縣",
+    "area": "成功鎮",
+    "date_offset_days": 2,
+    "hour": "06:00"
+  },
+  {
+    "query": "今天蘭嶼鄉天氣如何",
+    "type": "radar",
+    "city": "臺東縣",
+    "area": "蘭嶼鄉"
+  },
+  {
+    "query": "馬公市今天晚上天氣",
+    "type": "forecast",
+    "city": "澎湖縣",
+    "area": "馬公市",
+    "date_offset_days": 0,
+    "hour": "18:00"
+  },
+  {
+    "query": "七美鄉明天天氣如何",
+    "type": "forecast",
+    "city": "澎湖縣",
+    "area": "七美鄉",
+    "date_offset_days": 1
+  },
+  {
+    "query": "金門縣金城鎮明天會下雨嗎",
+    "type": "forecast",
+    "city": "金門縣",
+    "area": "金城鎮",
+    "date_offset_days": 1
+  },
+  {
+    "query": "後天金湖鎮天氣怎樣",
+    "type": "forecast",
+    "city": "金門縣",
+    "area": "金湖鎮",
+    "date_offset_days": 2
+  },
+  {
+    "query": "南竿鄉後天要不要帶傘",
+    "type": "forecast",
+    "city": "連江縣",
+    "area": "南竿鄉",
+    "date_offset_days": 2
+  },
+  {
+    "query": "大後天連江縣東引鄉天氣如何",
+    "type": "forecast",
+    "city": "連江縣",
+    "area": "東引鄉",
+    "date_offset_days": 3
+  },
+  {
+    "query": "臺北市中山區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "中山區"
+  },
+  {
+    "query": "臺北市信義區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "信義區"
+  },
+  {
+    "query": "士林區最近天氣如何",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "士林區"
+  },
+  {
+    "query": "文山區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "文山區"
+  },
+  {
+    "query": "臺北市北投區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺北市",
+    "area": "北投區"
+  },
+  {
+    "query": "松山區最近天氣如何",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "松山區"
+  },
+  {
+    "query": "板橋區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "板橋區"
+  },
+  {
+    "query": "新北市淡水區週末會下雨嗎",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "淡水區"
+  },
+  {
+    "query": "三峽區最近天氣如何",
+    "type": "radar",
+    "city": "新北市",
+    "area": "三峽區"
+  },
+  {
+    "query": "瑞芳區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "瑞芳區"
+  },
+  {
+    "query": "新北市烏來區週末會下雨嗎",
+    "type": "forecast",
+    "city": "新北市",
+    "area": "烏來區"
+  },
+  {
+    "query": "基隆市中正區週末會下雨嗎",
+    "type": "forecast",
+    "city": "基隆市",
+    "area": "中正區"
+  },
+  {
+    "query": "七堵區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "基隆市",
+    "area": "七堵區"
+  },
+  {
+    "query": "基隆市暖暖區週末會下雨嗎",
+    "type": "forecast",
+    "city": "基隆市",
+    "area": "暖暖區"
+  },
+  {
+    "query": "桃園區最近天氣如何",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "桃園區"
+  },
+  {
+    "query": "中壢區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "桃園市",
+    "area": "中壢區"
+  },
+  {
+    "query": "桃園市大溪區週末會下雨嗎",
+    "type": "forecast",
+    "city": "桃園市",
+    "area": "大溪區"
+  },
+  {
+    "query": "復興區最近天氣如何",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "復興區"
+  },
+  {
+    "query": "新竹市北區週末會下雨嗎",
+    "type": "forecast",
+    "city": "新竹市",
+    "area": "北區"
+  },
+  {
+    "query": "新竹市香山區週末會下雨嗎",
+    "type": "forecast",
+    "city": "新竹市",
+    "area": "香山區"
+  },
+  {
+    "query": "竹北市最近天氣如何",
+    "type": "radar",
+    "city": "新竹縣",
+    "area": "竹北市"
+  },
+  {
+    "query": "尖石鄉這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "新竹縣",
+    "area": "尖石鄉"
+  },
+  {
+    "query": "新竹縣關西鎮週末會下雨嗎",
+    "type": "forecast",
+    "city": "新竹縣",
+    "area": "關西鎮"
+  },
+  {
+    "query": "苗栗市最近天氣如何",
+    "type": "radar",
+    "city": "苗栗縣",
+    "area": "苗栗市"
+  },
+  {
+    "query": "通霄鎮這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "苗栗縣",
+    "area": "通霄鎮"
+  },
+  {
+    "query": "苗栗縣泰安鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "苗栗縣",
+    "area": "泰安鄉"
+  },
+  {
+    "query": "西屯區最近天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "西屯區"
+  },
+  {
+    "query": "北屯區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "北屯區"
+  },
+  {
+    "query": "臺中市豐原區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "豐原區"
+  },
+  {
+    "query": "大甲區最近天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "大甲區"
+  },
+  {
+    "query": "和平區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "和平區"
+  },
+  {
+    "query": "臺中市梧棲區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺中市",
+    "area": "梧棲區"
+  },
+  {
+    "query": "彰化市最近天氣如何",
+    "type": "radar",
+    "city": "彰化縣",
+    "area": "彰化市"
+  },
+  {
+    "query": "鹿港鎮這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "彰化縣",
+    "area": "鹿港鎮"
+  },
+  {
+    "query": "彰化縣田尾鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "彰化縣",
+    "area": "田尾鄉"
+  },
+  {
+    "query": "埔里鎮最近天氣如何",
+    "type": "radar",
+    "city": "南投縣",
+    "area": "埔里鎮"
+  },
+  {
+    "query": "仁愛鄉這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "南投縣",
+    "area": "仁愛鄉"
+  },
+  {
+    "query": "南投縣竹山鎮週末會下雨嗎",
+    "type": "forecast",
+    "city": "南投縣",
+    "area": "竹山鎮"
+  },
+  {
+    "query": "斗六市最近天氣如何",
+    "type": "radar",
+    "city": "雲林縣",
+    "area": "斗六市"
+  },
+  {
+    "query": "北港鎮這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "雲林縣",
+    "area": "北港鎮"
+  },
+  {
+    "query": "雲林縣臺西鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "雲林縣",
+    "area": "臺西鄉"
+  },
+  {
+    "query": "嘉義市東區週末會下雨嗎",
+    "type": "forecast",
+    "city": "嘉義市",
+    "area": "東區"
+  },
+  {
+    "query": "嘉義市西區週末會下雨嗎",
+    "type": "forecast",
+    "city": "嘉義市",
+    "area": "西區"
+  },
+  {
+    "query": "嘉義縣朴子市週末會下雨嗎",
+    "type": "forecast",
+    "city": "嘉義縣",
+    "area": "朴子市"
+  },
+  {
+    "query": "阿里山鄉最近天氣如何",
+    "type": "radar",
+    "city": "嘉義縣",
+    "area": "阿里山鄉"
+  },
+  {
+    "query": "中西區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "中西區"
+  },
+  {
+    "query": "臺南市安平區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "安平區"
+  },
+  {
+    "query": "永康區最近天氣如何",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "永康區"
+  },
+  {
+    "query": "麻豆區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "麻豆區"
+  },
+  {
+    "query": "臺南市七股區週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺南市",
+    "area": "七股區"
+  },
+  {
+    "query": "前鎮區最近天氣如何",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "前鎮區"
+  },
+  {
+    "query": "左營區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "左營區"
+  },
+  {
+    "query": "高雄市旗津區週末會下雨嗎",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "旗津區"
+  },
+  {
+    "query": "美濃區最近天氣如何",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "美濃區"
+  },
+  {
+    "query": "岡山區這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "高雄市",
+    "area": "岡山區"
+  },
+  {
+    "query": "屏東縣屏東市週末會下雨嗎",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "屏東市"
+  },
+  {
+    "query": "恆春鎮最近天氣如何",
+    "type": "radar",
+    "city": "屏東縣",
+    "area": "恆春鎮"
+  },
+  {
+    "query": "琉球鄉這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "琉球鄉"
+  },
+  {
+    "query": "屏東縣霧臺鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "屏東縣",
+    "area": "霧臺鄉"
+  },
+  {
+    "query": "宜蘭市最近天氣如何",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "宜蘭市"
+  },
+  {
+    "query": "礁溪鄉這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "礁溪鄉"
+  },
+  {
+    "query": "宜蘭縣羅東鎮週末會下雨嗎",
+    "type": "forecast",
+    "city": "宜蘭縣",
+    "area": "羅東鎮"
+  },
+  {
+    "query": "南澳鄉最近天氣如何",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "南澳鄉"
+  },
+  {
+    "query": "花蓮市這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "花蓮縣",
+    "area": "花蓮市"
+  },
+  {
+    "query": "花蓮縣吉安鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "花蓮縣",
+    "area": "吉安鄉"
+  },
+  {
+    "query": "秀林鄉最近天氣如何",
+    "type": "radar",
+    "city": "花蓮縣",
+    "area": "秀林鄉"
+  },
+  {
+    "query": "臺東市這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "臺東縣",
+    "area": "臺東市"
+  },
+  {
+    "query": "臺東縣成功鎮週末會下雨嗎",
+    "type": "forecast",
+    "city": "臺東縣",
+    "area": "成功鎮"
+  },
+  {
+    "query": "蘭嶼鄉最近天氣如何",
+    "type": "radar",
+    "city": "臺東縣",
+    "area": "蘭嶼鄉"
+  },
+  {
+    "query": "馬公市這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "澎湖縣",
+    "area": "馬公市"
+  },
+  {
+    "query": "澎湖縣七美鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "澎湖縣",
+    "area": "七美鄉"
+  },
+  {
+    "query": "金城鎮最近天氣如何",
+    "type": "radar",
+    "city": "金門縣",
+    "area": "金城鎮"
+  },
+  {
+    "query": "金湖鎮這個週末天氣好嗎",
+    "type": "forecast",
+    "city": "金門縣",
+    "area": "金湖鎮"
+  },
+  {
+    "query": "連江縣南竿鄉週末會下雨嗎",
+    "type": "forecast",
+    "city": "連江縣",
+    "area": "南竿鄉"
+  },
+  {
+    "query": "東引鄉最近天氣如何",
+    "type": "radar",
+    "city": "連江縣",
+    "area": "東引鄉"
+  },
+  {
+    "query": "我要去桃園火車站前商圈玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "桃園市",
+    "area": "桃園區"
+  },
+  {
+    "query": "我要去櫻木花道賞櫻區玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "嘉義縣",
+    "area": "梅山鄉"
+  },
+  {
+    "query": "我要去內埤海灘玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "宜蘭縣",
+    "area": "蘇澳鎮"
+  },
+  {
+    "query": "我要去萬和宮玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "南屯區"
+  },
+  {
+    "query": "我要去三空泉登山步道玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "新北市",
+    "area": "淡水區"
+  },
+  {
+    "query": "我要去新光碼頭玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "高雄市",
+    "area": "苓雅區"
+  },
+  {
+    "query": "我要去四十二份坪步道玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "苗栗縣",
+    "area": "南庄鄉"
+  },
+  {
+    "query": "我要去仙湖休閒農場玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "東山區"
+  },
+  {
+    "query": "我要去福壽山農場玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "臺中市",
+    "area": "和平區"
+  },
+  {
+    "query": "我要去澎湖龜壁港社玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "澎湖縣",
+    "area": "湖西鄉"
+  },
+  {
+    "query": "我要去北門潟湖玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "臺南市",
+    "area": "北門區"
+  },
+  {
+    "query": "我要去仙岩公園玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "臺北市",
+    "area": "文山區"
+  },
+  {
+    "query": "我要去咸安宮玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "彰化縣",
+    "area": "大城鄉"
+  },
+  {
+    "query": "我要去福隆山步道玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "新北市",
+    "area": "五股區"
+  },
+  {
+    "query": "我要去坪林親水吊橋玩，那邊現在天氣如何",
+    "type": "radar",
+    "city": "新北市",
+    "area": "坪林區"
+  }
 ]

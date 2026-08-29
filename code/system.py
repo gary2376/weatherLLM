@@ -45,7 +45,7 @@ else:
         return _decorator
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
@@ -53,7 +53,12 @@ import glob
 import xml.etree.ElementTree as ET
 import sys
 
-from repository import get_attractions_for_area, get_lodgings_for_area, get_district_coords
+from repository import (
+    get_attractions_for_area,
+    get_lodgings_for_area,
+    get_district_coords,
+    resolve_unique_city_for_district,
+)
 import weather_graph
 
 # RAG（Data/chroma/ 向量索引 + Data/bm25_index.pkl）是選配：索引沒建過、或缺
@@ -223,6 +228,16 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
       - area: 行政區名稱 (e.g. '西屯區')
       - date: YYYY-MM-DD (若 type == 'forecast')
       - hour: HH:MM (可選，否則預設用 06:00 或 18:00)
+
+    Phase 6 ground truth eval 跑出兩個真實model弱點，這裡改用「不靠model猜」的
+    方式修：(1) LLM對「大後天」這類相對日期算術常常算錯（明講換算公式後還是會錯），
+    改成只讓LLM回傳「幾天後」這個小整數分類，實際日期用 `timedelta` 在程式碼裡算，
+    邏輯運算不該交給LLM；(2) LLM對冷門行政區（例如「復興區」只存在於桃園市）常常
+    猜錯或猜成預設的臺中市，這種obscure鄉鎮的縣市歸屬本來就是`district_coords`
+    表裡查得到的正確答案，不該靠LLM世界知識用猜的——解析完後用
+    `resolve_unique_city_for_district()` 查表校正，全台唯一對應一個縣市時直接
+    覆寫LLM的猜測。兩者都是「用確定性方法取代模型猜測」，不是fine-tuning要解決
+    的問題（fine-tuning留給真正需要模型判斷力、查表解決不了的部分）。
     """
     today_str = datetime.now().strftime("%Y-%m-%d")
     system_prompt = (
@@ -230,12 +245,19 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
         "你是一個天氣查詢理解助手，請從使用者的問題中抽取出以下資訊並以 JSON 回傳：\n\n"
         "- type: 'radar' 或 'forecast'\n"
         "  - 查詢『現在、即時、等一下、目前、這時候』等屬於 radar\n"
-        "  - 查詢『明天、後天、週末、晚上、早上、未來幾天、6月3日』等屬於 forecast\n\n"
+        "  - 查詢『今天（且提到早上/晚上等時段）、明天、後天、大後天、週末、未來幾天、"
+        "6月3日』等屬於 forecast；單純『今天天氣如何』沒有提到時段時，視為問現在狀況，屬於 radar\n\n"
         "- city: 台灣縣市全名，如 '臺北市', '高雄市' 等（簡稱如台北、台中請轉成官方全名，"
         "'台'一律寫成'臺'）；使用者沒提到縣市時，預設 '臺中市'。\n"
         "- area: 該縣市的行政區名稱，如 '西屯區', '北區' 等；若提及景點，請推論該景點所屬的縣市與行政區。\n"
-        "- date: 如果 type 是 forecast，請回傳查詢目標日期（格式：YYYY-MM-DD）\n"
-        "- hour: 如有提供時間，回傳格式為 'HH:MM'，否則可省略\n\n"
+        "- date: 如果 type 是 forecast，請回傳查詢目標日期（格式：YYYY-MM-DD）；"
+        "如果是『明天/後天/大後天』這種相對今天的說法，除了 date 也額外回傳 relative_day_offset\n"
+        "- relative_day_offset: 只有問句明確是『今天』『明天』『後天』『大後天』時才回傳，"
+        "分別對應整數 0/1/2/3；其他情況（週末、未來幾天、明確日期如6月3日）不要回傳這個欄位，"
+        "不要自己算日期加減，交給程式處理\n"
+        "- hour: 如有提供具體時間（如「早上6點」）請直接轉成 'HH:MM'；"
+        "若只提到模糊時段，請依下列規則轉換，不要省略：早上／上午→'06:00'，"
+        "中午→'12:00'，下午→'14:00'，晚上／傍晚→'18:00'；完全沒提到時段才省略此欄位。\n\n"
         "僅回傳 JSON 結果，請勿加入解釋或多餘文字。\n\n"
         f"{PROMPT_INJECTION_GUARD}"
     )
@@ -255,7 +277,31 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
         content = content.strip("`").strip()
         if content.lower().startswith("json"):
             content = content[4:].strip()
-    return json.loads(content)
+    info = json.loads(content)
+
+    # 相對日期改由程式碼算，不信任LLM自己的日期算術（見上方docstring）
+    offset = info.get("relative_day_offset")
+    if isinstance(offset, int) and 0 <= offset <= 3:
+        info["date"] = (datetime.now() + timedelta(days=offset)).strftime("%Y-%m-%d")
+    info.pop("relative_day_offset", None)
+
+    # 行政區全台唯一對應一個縣市時，用查表結果校正LLM猜的city（見上方docstring）
+    area = info.get("area")
+    if area:
+        resolved_city = resolve_unique_city_for_district(area)
+        if resolved_city:
+            info["city"] = resolved_city
+    elif info.get("city"):
+        # 縣轄市（苗栗市/宜蘭市/花蓮市/臺東市等）跟縣的命名容易搞混，LLM有時候
+        # 把「苗栗市」整個塞進city欄位、area留空，而不是正確拆成
+        # city=苗栗縣/area=苗栗市。這裡補一個方向：city本身如果剛好是全台唯一
+        # 對應一個上級縣市的行政區名稱，就當作area處理，city改成查到的縣。
+        resolved_city = resolve_unique_city_for_district(info["city"])
+        if resolved_city and resolved_city != info["city"]:
+            info["area"] = info["city"]
+            info["city"] = resolved_city
+
+    return info
 
 
 @observe(name="generate_answer_from_user_prompt_and_data")

@@ -77,4 +77,33 @@ def get_district_coords(city: str, district: str) -> Optional[tuple[float, float
         ).fetchone()
         if row and row[0] is not None:
             return row
+
+        # LLM 偶爾會把縣市名稱黏在一起回傳（例如把「彰化市」誤判成「彰化縣彰化市」），
+        # 導致上面兩個精確查詢都落空、靜靜地退回預設座標（使用者問彰化卻查到台中天氣，
+        # 沒有任何錯誤訊息）。這裡多一步：檢查 city_norm 裡有沒有包住某個真實存在的
+        # 縣市全名，包到的話用那個乾淨的縣市名重查一次。
+        if city_norm:
+            known_cities = [r[0] for r in conn.execute("SELECT DISTINCT city FROM district_coords")]
+            matches = [c for c in known_cities if c in city_norm]
+            if len(matches) == 1:
+                return get_district_coords(matches[0], district)
+    return None
+
+
+def resolve_unique_city_for_district(district: str) -> Optional[str]:
+    """行政區名稱如果全臺只對應唯一一個縣市，直接回傳那個縣市，不用猜。用在
+    `analyze_prompt_with_llm()` 校正 LLM 猜錯縣市的情況（例如 LLM 把「復興區」
+    這種只存在於桃園市的行政區猜成臺中市——這種obscure鄉鎮的縣市歸屬本來就是
+    查表就能查到的正確答案，不該靠 LLM 的世界知識去猜）。同名跨縣市的行政區
+    （中山區/中正區等）回傳 None，交給 LLM 自己從問句上下文判斷，不亂覆寫。"""
+    if not district:
+        return None
+    district_norm = district.replace("台", "臺")
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT city FROM district_coords WHERE district = ?",
+            (district_norm,),
+        ).fetchall()
+    if len(rows) == 1:
+        return rows[0][0]
     return None

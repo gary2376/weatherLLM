@@ -1,7 +1,9 @@
 """量測 analyze_prompt_with_llm() 的意圖解析準確率（type/city/area/date/hour）。
-見 ROADMAP.md Phase 5。20組問句，涵蓋全台不同縣市＋radar/forecast兩種type＋
-相對日期（明天/後天）——用gpt-4o-mini，20次呼叫成本可忽略（先跑小量驗證方法可行，
-不是一次衝到roadmap建議的30-50題，之後有需要再擴充，避免第一次跑就燒太多錢）。
+見 ROADMAP.md Phase 5/Phase 6。原本20組（Phase 5先小量驗證方法可行），Phase 6
+為了給fine-tuning當訓練/評估資料，擴充到260組，涵蓋全部22縣市＋radar/forecast
+兩種type＋相對日期（今天/明天/後天/大後天）＋部分早晚時段＋景點名稱推論行政區——
+用gpt-4o-mini，260次呼叫成本仍在幾分錢等級（不是免費，但不到需要另外編預算的
+程度），不像20次那樣可以說「可忽略」，跑之前留意一下。
 
 用法：python3 eval/run_intent_eval.py（需要 .env 有 OPENAI_API_KEY）
 會呼叫真的 OpenAI API，不是deterministic測試，接的是 nightly-eval.yml（手動/排程
@@ -15,8 +17,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "code"))
 
-MIN_EXACT_MATCH = 0.8  # 目前基準是95%(19/20)，抓80%當門檻，容忍模型行為小幅漂移
-# 但抓得出真的退步
+MIN_EXACT_MATCH = 0.85  # 見 ROADMAP.md Phase 6。20組時基準95%(19/20)；擴充到
+# 260組後先誠實測出model真弱點是76.5%(199/260)；接著把「大後天日期算術」「冷門
+# 行政區縣市歸屬」「縣轄市欄位擺錯」這三類會犯錯的地方，從「讓LLM猜」改成「查
+# `district_coords`表+程式碼算」——不是fine-tuning，是把系統裡本來就有正確答案
+# 的東西交給查表，最終基準衝到93.8%(244/260)。門檻抓0.85，留緩衝容忍
+# temperature=0.2的隨機性，抓的是「比93.8%明顯退步」，不是要求每次都碰到93.8%
 
 
 def load_cases():
