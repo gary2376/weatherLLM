@@ -1,64 +1,76 @@
-# 系統簡介 — 台中天氣小幫手
+# weatherLLM — 全台天氣＋旅遊建議系統
 
-這是一個面向使用者的「天氣 + 旅遊建議」系統，其核心目標是用自然語言回答台中地區的即時天氣與預報查詢，並結合在地景點與住宿資訊提供實用建議。此說明檔專注於系統概念、功能範圍、資料來源與運作原則，不包含程式碼或操作步驟。
+Streamlit 打造的天氣查詢＋景點/住宿推薦系統，資料涵蓋全台 22 縣市（不是只有台中）。開發過程與每個階段的決策記錄在 [ROADMAP.md](ROADMAP.md)。
 
-## 系統定位
+**目前狀態：尚未正式公開上線**，開發環境已可跑（見下方「本機執行」），Streamlit Community Cloud 部署與上線前檢查清單還在 ROADMAP.md 的 Phase 0/1/4 追蹤中，尚未完成。
 
-系統為一個輕量級的查詢與建議平台，目標用戶為一般民眾與旅遊規劃者，能夠以一句話的自然語言輸入（繁體中文），取得：
+## 系統長什麼樣
 
-- 即時天氣摘要與近期降雨概況（做為 radar 的替代與補充）。
-- 指定日期的天氣預報摘要（含代表性時段資訊與簡短全天概述）。
-- 結合當地景點與住宿的建議（若該地的資料可用），以提升實用性與行程規劃品質。
+```
+使用者
+  │
+  ▼
+streamlit_app.py::main()  ── Streamlit UI（地圖／CCTV圖釘／聊天框）
+  │
+  ▼
+orchestrator.py（LangGraph）
+  ├─ lightweight_node → WeatherChatbot（關鍵字比對，免費，涵蓋台中/台北/新竹/台南/高雄5大城市＋部分行政區）
+  ├─ supervisor_node  → 判斷要不要走進階路徑（天氣關鍵字觸發）
+  └─ advanced_node    → system.py::get_weather_data()（需使用者自己貼 OpenAI key）
+                            └─ weather_graph.py（LangGraph）
+                                 intent_node（LLM 解析問句）
+                                 → weather_node（Open-Meteo 即時/預報）
+                                 → attraction_node / lodging_node（平行，查 RAG）
+                                 → synthesis_node（LLM 生成自然語言建議）
 
-## 主要特色
+資料層：repository.py（SQLite，Data/travel.db）
+       + hybrid_search.py / rag.py（Chroma 向量庫 + BM25，本地免費 embedding，不用付費 API）
+可觀測：Langfuse（選配，追蹤 LLM 呼叫延遲與 RAG fallback 比例）
+```
 
-- LLM 驅動的語意解析：系統會將使用者輸入解析成查詢類型（即時/預報）、目標區域與時間資訊，然後組合最相關的資料回應使用者。
-- 遠端氣象資料為主要來源：採用公開的氣象 API 作為唯一天氣資料來源，降低對本機資料庫或特殊環境的依賴。
-- 在地資料融合：若可用，本系統會整合本地或合併後的景點/住宿資料，並依據當日天氣與場景給出推薦。
-- 使用者安全與輸出清理：多層文字清理與格式檢查，避免把機器格式（如 JSON、空陣列或多重 null）直接呈現給使用者；當輸出不可讀或不完整時，會顯示友善的提示。
+## 功能
 
-## 資料來源與隱私考量
+- **全台天氣查詢**：即時雷達/降水摘要、指定日期時段預報（資料源：Open-Meteo，免費無需金鑰）
+- **景點/住宿/餐廳推薦**：混合檢索（BM25 + 語意向量 RRF 融合），支援「下雨天室內景點」這類天氣條件過濾
+- **地圖 + CCTV 圖釘顯示**（輕量路徑，不需要任何 API key）
+- **進階自然語言建議**（需使用者自行在側欄貼上 OpenAI API key，Bring-Your-Own-Key，app 擁有者不需負擔費用）
+- **可觀測性**：Langfuse 追蹤（選配，未設定金鑰時優雅降級為無 tracing 版本）
 
-- 氣象資料：以公共氣象 API 作為主要來源（無需提供第三方金鑰即可取得基本即時與預報資料）。
-- 在地資料：若系統有在地景點/住宿資料，系統會在建立建議時引用該資訊；若無，仍會僅提供天氣相關摘要與建議。
-- 隱私：系統不會在輸出中暴露任何使用者提供的機密資料。若使用 LLM 生成內容，使用者的查詢文本可能會送到 LLM 服務（取決於部署與設定），請在部署前確認隱私政策與金鑰管理策略。
+## 資料來源
 
-## 運作原則與限制
+全部來自官方公開資料，不是手動蒐集：
 
-- 可用性依賴於外部氣象 API 的可達性與穩定性；若外部服務暫時不可用，系統會回傳對應的錯誤或提示。
-- LLM 生成的建議為輔助性質，並非專業氣象或安全警示：遇到極端氣候或緊急情況，請以官方氣象單位與主管機關發布的資訊為準。
-- 在地資料完整性影響建議品質：若景點/住宿資料不完整或缺少地區標籤，系統的在地建議可能較少或較不精準。
+- 觀光資料：交通部觀光署觀光資訊資料庫（景點/住宿/餐廳，含 `Facilities`/`RestaurantFeatures` 等結構化欄位）
+- 交通站點：TDX 運輸資料流通服務
+- 天氣：Open-Meteo（即時 + 預報）
+- 行政區座標：從上述景點/住宿/餐飲三張表在每個縣市＋行政區內取平均座標推算（見 `collector/derive_district_coords.py`），不是手打的清單
 
-## 適用場景
+收集流程與每個資料表的欄位/筆數/資料品質稽核記錄在 ROADMAP.md Phase 0。
 
-- 旅遊規劃：快速獲得指定行政區在某日的天氣摘要與適合的活動建議。
-- 即時查詢：查看某地當前天氣與短期降雨情況以決定行動（例如是否攜帶雨具）。
-- 教學與範例：展示如何結合公開氣象資料與語言模型，構建對話式建議系統（系統層面概念適合用於學習與延伸）。
+## 技術重點
 
-## 部署與運維建議（概念性）
+- **RAG**：`code/hybrid_search.py`（BM25 + 語意檢索 + RRF 融合）比純語意檢索的 Hit Rate@5 高 8.3 個百分點（91.67% vs 83.33%，24 組人工核對過的 ground truth，見 ROADMAP.md Phase 1）
+- **本地免費 embedding**：`BAAI/bge-small-zh-v1.5`（透過 `fastembed`），避免使用者查詢時持續累積 OpenAI embedding 費用
+- **LangGraph 多節點編排**：天氣查詢拆成 `intent_node → weather_node → attraction_node/lodging_node（平行）→ synthesis_node`；另一層 supervisor + worker graph 決定要不要呼叫 OpenAI 進階路徑，取代原本寫死在 UI 裡的 if/else
+- **確定性修正取代模型猜測**：意圖解析的日期加減、行政區↔縣市對應這類「答案本來就在資料庫裡」的判斷，改用程式碼查表而不是讓 LLM 猜（詳見 ROADMAP.md Phase 6，把準確率從 76.5% 修到 93.8%）
+- **兩層測試**：`tests/`（deterministic pytest，不打 LLM，接 CI）+ `eval/`（真的呼叫 OpenAI 的 live eval，手動/排程觸發，避免每次 push 都花錢）
 
-- 將外部金鑰（若使用）與敏感設定以安全的方式管理（例如環境變數或秘密管理服務）。
-- 將在地資料備份並標示來源與更新時間，以維持推薦內容的可靠性。
-- 監控外部 API 的可用性並設定合理的超時與重試策略，以提高系統穩定性。
+## 本機執行
 
-## 常見問題（概念性回答）
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # 填入 OPENAI_API_KEY（選填，沒填只能用輕量路徑）
+streamlit run code/streamlit_app.py
+```
 
-- 為何有時候建議看起來過於簡短或不完整？
-  - LLM 的輸出會受到可用上下文（氣象資料與在地資料）的限制；若上下文不足，系統會回傳簡短且保守的建議。
+首次執行前需要先跑過 `collector/` 底下的資料收集腳本產生 `Data/travel.db`（`.gitignore` 排除，不進版控）；RAG 索引則需要 `python collector/build_embeddings.py`。詳細維護流程見 [SKILL.md](SKILL.md)。
 
-- 如果需要更精準的在地推薦，應做什麼？
-  - 優化在地資料（補齊地區欄位、評分或分類），並確認資料來源的品質與更新頻率。
+```bash
+pytest tests/                          # deterministic 測試，免費，接 CI
+python eval/run_eval.py hybrid         # RAG 檢索品質 eval，免費，需先建好索引
+python eval/run_intent_eval.py         # 意圖解析準確率 eval，會打 OpenAI API
+```
 
----
+## 授權
 
-如需我把這份系統說明轉成其他語言、縮短為一頁式簡介、或產出給外部用戶的宣傳文案（不包含技術細節），我可以繼續幫你處理。
-# 個人化氣象決策系統 
-
-這個專案是一個基於 Streamlit 的互動式天氣與景點查詢系統（包含 CCTV 地圖與 RAG-LM 整合）。
-
-Live demo
----------
-
-- 線上已部署（Streamlit Community Cloud）：[https://weatherllm-e2qqgtnwwcauyzyldyqt8q.streamlit.app/](https://weatherllm-e2qqgtnwwcauyzyldyqt8q.streamlit.app/)
-
-
+程式碼採 MIT License（見 [LICENSE](LICENSE)）；各資料源（觀光資料標準 V2.1／TDX 使用條款／政府資料開放授權條款）另有各自的引用/標示要求，尚未整理成獨立文件（見 ROADMAP.md Phase 0 待辦）。

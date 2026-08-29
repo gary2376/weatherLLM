@@ -110,7 +110,11 @@ def fetch_all():
                 conn.execute(
                     """INSERT INTO transit_stations
                        (station_name, city, type, tdx_id, latitude, longitude, source, fetched_at)
-                       VALUES (?,?,?,?,?,?,?,?)""",
+                       VALUES (?,?,?,?,?,?,?,?)
+                       ON CONFLICT(tdx_id, type, city) DO UPDATE SET
+                         station_name=excluded.station_name, latitude=excluded.latitude,
+                         longitude=excluded.longitude, source=excluded.source,
+                         fetched_at=excluded.fetched_at""",
                     (name, CITY_ZH.get(city, city), kind, tdx_id, lat, lon, "TDX", fetched_at),
                 )
             conn.commit()

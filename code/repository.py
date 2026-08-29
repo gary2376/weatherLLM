@@ -1,5 +1,7 @@
 """資料存取層：所有讀 Data/travel.db 的地方都走這裡，system.py/streamlit_app.py 不直接碰 SQL。
-新資料源沒有 Rating、沒有餐廳(restaurant)類別（見 ROADMAP.md Phase 0 決策），呼叫端要接受這兩點。
+新資料源沒有 Rating（見 ROADMAP.md Phase 0 決策，呼叫端要接受這點）；餐廳
+(restaurant) 類別原本也沒有，後來收集了觀光署餐飲資料集補上，見下方
+`query_restaurants()`。
 
 city/district 一律在這裡做「台→臺」正規化再進 SQL，因為資料源存的是官方全名（臺中市，非台中市），
 呼叫端（LLM 解析出的文字、使用者輸入）常用簡寫，正規化只做這一處，不必每個呼叫端各自處理。

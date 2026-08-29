@@ -109,10 +109,15 @@ def _make_safe(msg: str) -> str:
         # last resort: explicit \uXXXX replacement
         return ''.join(c if ord(c) < 128 else f'\\u{ord(c):04x}' for c in msg)
 
-# 請勿將 OpenAI API Key 硬編碼在程式碼中。
-# 金鑰應由執行環境或呼叫端設定，例如：
-#  - 使用環境變數 OPENAI_API_KEY
-#  - 或由呼叫的應用程式（例如 streamlit）動態設定 system.openai.api_key
+# 請勿將 OpenAI API Key 硬編碼在程式碼中，應由執行環境（`.env`/`OPENAI_API_KEY`）設定。
+#
+# 這裡設定的是舊版 openai<1.0 SDK 才會讀的全域 `openai.api_key`——新版SDK
+# （`OpenAI()` client，本專案實際在用的那個）不讀這個屬性，直接讀
+# `OPENAI_API_KEY` 環境變數，這行對新版SDK是無效的死程式碼，只是保留給萬一
+# 環境裡裝到舊版套件時的相容性備援。**不要**把這行當成傳遞使用者個別金鑰的
+# 管道——那是 `_create_chat_completion()` 的 `api_key` 參數在做的事（見下方
+# 說明），這裡只在process啟動當下讀一次owner自己的環境變數，不是per-request
+# 的使用者金鑰，兩者不要混用。
 env_openai_key = os.getenv("OPENAI_API_KEY")
 if env_openai_key:
     openai.api_key = env_openai_key
@@ -155,12 +160,24 @@ OPENAI_TIMEOUT_SECONDS = 20.0
 # 兼容舊版與新版 openai 套件的共用 helper——原本 analyze_prompt_with_llm() 跟
 # generate_answer_from_user_prompt_and_data() 各自 nested 定義一份完全一樣的
 # code，搬到 module 層級後兩邊共用同一份，改一次兩邊都生效。
-def _create_chat_completion(model, messages, **kwargs):
+#
+# api_key 參數是審查發現的安全性修正：Streamlit 這種多使用者共用一個process的
+# 部署方式下，原本 streamlit_app.py 會把使用者貼的key寫進`os.environ`/
+# `openai.api_key`這兩個process全域狀態——這代表A使用者貼的key可能被B使用者
+# 的請求誤用（cross-session洩漏），不是per-session隔離。改成由呼叫端把key當
+# 參數一路傳下來，這裡才真的建立client，不寫回任何全域變數；不傳時(`None`)
+# `OpenAI()`維持原本行為，退回讀取`OPENAI_API_KEY`環境變數（給本機/CLI/eval
+# 這種單一使用者情境用，那些情境沒有跨使用者洩漏的疑慮）。
+def _create_chat_completion(model, messages, api_key=None, **kwargs):
     if HAS_OPENAI_NEW and OpenAI is not None:
-        client = OpenAI(timeout=OPENAI_TIMEOUT_SECONDS)
+        client = OpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT_SECONDS)
         return client.chat.completions.create(model=model, messages=messages, **kwargs)
     else:
-        # fallback to older openai package interface
+        # 舊版openai<1.0 SDK的相容分支——codex複查時指出這條完全沒接api_key參數
+        # （舊SDK本身就只能靠全域`openai.api_key`傳金鑰，沒有per-call傳法，要接
+        # 就得走回上面那段剛修掉的全域狀態寫法，等於走回頭路）。既然
+        # requirements.txt已經把openai pin到>=1.0.0，這條分支正常情況下不會被
+        # 執行到，故意留著不修api_key只是相容性備援，不是可信賴的BYOK路徑。
         return openai.ChatCompletion.create(model=model, messages=messages, **kwargs)
 
 
@@ -220,7 +237,7 @@ def _is_machine_like(s: str) -> bool:
 
 
 @observe(name="analyze_prompt_with_llm")
-def analyze_prompt_with_llm(user_prompt: str) -> dict:
+def analyze_prompt_with_llm(user_prompt: str, api_key: Optional[str] = None) -> dict:
     """
     呼叫 LLM 把使用者問題解析成 JSON，包含：
       - type: 'radar' 或 'forecast'
@@ -264,6 +281,7 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
 
     response = _create_chat_completion(
         model="gpt-4o-mini",
+        api_key=api_key,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -305,7 +323,7 @@ def analyze_prompt_with_llm(user_prompt: str) -> dict:
 
 
 @observe(name="generate_answer_from_user_prompt_and_data")
-def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str) -> str:
+def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str, api_key: Optional[str] = None) -> str:
     """
     呼叫 LLM，把「使用者提問」以及拼好的 raw_data (包含天氣、景點、住宿)
     一併傳給 LLM，讓它回覆一段口語化、自然的建議。
@@ -331,6 +349,7 @@ def generate_answer_from_user_prompt_and_data(user_prompt: str, raw_data: str) -
     try:
         response = _create_chat_completion(
             model="gpt-4o",
+            api_key=api_key,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt_combined}
@@ -624,7 +643,12 @@ def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str
 
 
 @observe(name="get_weather_data")
-def get_weather_data(user_prompt: str, area_override: Optional[str] = None, city_override: Optional[str] = None) -> str:
+def get_weather_data(
+    user_prompt: str,
+    area_override: Optional[str] = None,
+    city_override: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> str:
     """
     主要入口：交給 `weather_graph.py` 的 LangGraph 節點圖執行：
     intent_node（analyze_prompt_with_llm）→ weather_node（fetch_radar_data／
@@ -637,9 +661,13 @@ def get_weather_data(user_prompt: str, area_override: Optional[str] = None, city
     邏輯完全沿用本檔案既有函式，沒有重寫。`sys.modules[__name__]`
     （也就是本檔案自己）傳給圖，讓節點呼叫到的是「當下」的函式版本——測試裡用
     `monkeypatch.setattr(system, ...)` 蓋掉的函式，圖也會如實吃到，不會繞過。
+
+    `api_key`：審查發現的安全性修正，見 `_create_chat_completion()` 的說明——
+    Streamlit 多使用者共用一個process時，不能用寫入`os.environ`的方式傳金鑰
+    （會跨session洩漏），改成一路當參數往下傳到真正建立OpenAI client那一刻。
     """
     return weather_graph.run_weather_graph(
-        sys.modules[__name__], user_prompt, area_override, city_override
+        sys.modules[__name__], user_prompt, area_override, city_override, api_key=api_key
     )
 
 if __name__ == "__main__":

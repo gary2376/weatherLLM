@@ -18,7 +18,7 @@ def _make_fake_sysmod(**overrides):
         WARN_PREFIX="WARN:",
         DEFAULT_CITY="臺中市",
         _make_safe=lambda s: s,
-        analyze_prompt_with_llm=lambda prompt: {
+        analyze_prompt_with_llm=lambda prompt, api_key=None: {
             "type": "forecast", "city": "臺中市", "area": "西屯區",
             "date": "2026-01-01", "hour": "06:00",
         },
@@ -29,7 +29,7 @@ def _make_fake_sysmod(**overrides):
         _get_places_for_area=lambda user_prompt, area, city, place_type, top_n: (
             ["某景點"] if place_type == "attraction" else ["某住宿"]
         ),
-        generate_answer_from_user_prompt_and_data=lambda user_prompt, raw_data: "這是最終建議文字",
+        generate_answer_from_user_prompt_and_data=lambda user_prompt, raw_data, api_key=None: "這是最終建議文字",
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -48,7 +48,7 @@ def test_weather_graph_merges_parallel_attraction_and_lodging_into_raw_data():
     synthesis_node 的 raw_data，不是其中一支被另一支蓋掉。"""
     captured = {}
 
-    def spy_generate(user_prompt, raw_data):
+    def spy_generate(user_prompt, raw_data, api_key=None):
         captured["raw_data"] = raw_data
         return "最終建議"
 
@@ -58,10 +58,23 @@ def test_weather_graph_merges_parallel_attraction_and_lodging_into_raw_data():
     assert "某住宿" in captured["raw_data"]
 
 
+def test_weather_graph_attraction_node_failure_degrades_gracefully():
+    """`_get_places_for_area()`的SQL退回路徑本身出錯（例如DB出問題）時，
+    attraction_node/lodging_node不該把例外往上炸穿整個graph——應該當作查無資料
+    處理，讓synthesis_node照樣產生回覆（帶「沒有景點資料」的訊息），不是整個
+    請求失敗。"""
+    def boom(user_prompt, area, city, place_type, top_n):
+        raise RuntimeError("DB掛了")
+
+    sysmod = _make_fake_sysmod(_get_places_for_area=boom)
+    result = weather_graph.run_weather_graph(sysmod, "西屯區明天天氣如何")
+    assert "這是最終建議文字" in result
+
+
 def test_weather_graph_intent_error_short_circuits_downstream_nodes():
     calls = {"weather": 0, "attraction": 0, "synthesis": 0}
 
-    def boom(prompt):
+    def boom(prompt, api_key=None):
         raise RuntimeError("LLM掛了")
 
     def track_weather(area, city, target_date, target_hour):

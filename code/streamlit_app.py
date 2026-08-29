@@ -32,7 +32,7 @@ def sanitize_for_display(content) -> str:
     except Exception:
         return "（訊息內容無法顯示）"
 
-# ---- 新增：嘗試導入 system.py 中的函式（改為 import module，方便動態設定 openai.api_key） ----
+# ---- 新增：嘗試導入 system.py 中的函式（import整個module，方便存取get_weather_data） ----
 SYSTEM_PY_AVAILABLE = False
 # 預先定義一個替代函式，以防導入失敗
 def get_system_weather_data_fallback(prompt_text: str) -> str:
@@ -43,7 +43,9 @@ system_module = None
 # 強制使用遠端 Open-Meteo 作為天氣資料來源（不依賴本機 DB/XML）
 os.environ['USE_LOCAL_DATA'] = os.getenv('USE_LOCAL_DATA', '0')  # 預設為 '0'，即使用遠端
 try:
-    # 匯入整個 module，稍後可動態設定 system.openai.api_key
+    # 匯入整個 module，才能拿到 system.get_weather_data；不是為了動態設定
+    # system.openai.api_key——那個寫法已經因為跨session洩漏風險被拿掉了，
+    # 見main()裡effective_api_key的說明，key是當參數傳，不是寫模組屬性
     system_module = importlib.import_module('system')
     if hasattr(system_module, 'get_weather_data'):
         get_system_weather_data = system_module.get_weather_data
@@ -156,8 +158,9 @@ class CCTVManager:
         return sorted(nearby_cctvs, key=lambda x: x['distance'])
 
 class AttractionManager:
-    """景點/住宿改讀 Data/travel.db（見 repository.py），不再預先整包載入記憶體，
-    每次查詢才下 SQL 撈需要的那一小塊。新資料源沒有 Rating、沒有餐廳類別（見 ROADMAP.md Phase 0）。"""
+    """景點/住宿/餐廳改讀 Data/travel.db（見 repository.py），不再預先整包載入記憶體，
+    每次查詢才下 SQL 撈需要的那一小塊。新資料源沒有 Rating（見 ROADMAP.md Phase 0）；
+    餐廳類別後來有補上（觀光署餐飲資料集），下面 `restaurant` 分支會查 `repository.query_restaurants()`。"""
 
     def get_attractions(self, city: str = "臺中市", district: Optional[str] = None,
                          attraction_type: Optional[str] = None, num_attractions: int = 5) -> pd.DataFrame:
@@ -188,6 +191,12 @@ class WeatherChatbot:
 
     CITY_NAME_MAP = {"台中": "臺中市", "台北": "臺北市", "新竹": "新竹市", "台南": "臺南市", "高雄": "高雄市"}
 
+    # 「新竹」這個分組底下混了新竹市跟新竹縣的地名（竹北/湖口/竹東其實都在新竹縣，
+    # 不是新竹市）——CITY_NAME_MAP是整組對應同一個縣市，會把這幾個地名的天氣
+    # 查到新竹市去。其餘分組（台中/台北/台南/高雄）list裡的地名都真的屬於同一個
+    # 縣市，沒有這種混雜問題，不用比照處理。
+    DISTRICT_CITY_OVERRIDE = {"竹北": "新竹縣", "湖口": "新竹縣", "竹東": "新竹縣"}
+
     def process_message(self, user_message: str, override_district: Optional[str] = None) -> Tuple[str, List[str], Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
         """
         處理使用者訊息。
@@ -203,7 +212,27 @@ class WeatherChatbot:
         city_districts_map = {'台中': ['中區', '北區', '西區', '南區', '東區', '北屯區', '西屯區', '南屯區', '太平區', '大里區', '霧峰區', '烏日區', '豐原區', '后里區', '石岡區', '東勢區', '和平區', '新社區', '潭子區', '大雅區', '神岡區', '大肚區', '沙鹿區', '龍井區', '梧棲區', '清水區', '大甲區', '外埔區', '大安區', '台中市', '臺中'], '台北': ['台北', '士林', '內湖', '大安', '信義', '中山', '中正', '萬華', '文山', '北投', '大同', '南港', '臺北'], '新竹': ['新竹', '竹北', '湖口', '竹東'], '台南': ['台南', '安南', '北區', '中西區', '東區', '南區', '永康', '安平', '新營', '臺南'], '高雄': ['高雄', '鳳山', '左營', '三民', '苓雅', '前鎮', '楠梓', '鼓山']}
         query_type, target_region, target_district = None, None, None
 
+        # 審查發現的真bug：像「大安區」（台中/台北都有）、「北區」「東區」「南區」
+        # （台中/台南都有）這些同名跨縣市的行政區，原本不管訊息裡有沒有明確提到
+        # 縣市，一律照city_districts_map的字典insertion順序（台中最先）找到誰就
+        # 用誰——導致「台北大安區」被誤判成台中的大安區、「台南北區」被誤判成
+        # 台中的北區。修法：先掃一次訊息裡有沒有明確提到某個縣市別名，有的話
+        # 該縣市的行政區清單優先比對，比對不到才退回原本的字典順序。
+        mentioned_city_key = None
         for city_k, dist_list in city_districts_map.items():
+            for alias in dist_list:
+                is_alias = (alias == city_k or alias == city_k + "市" or alias == city_k.replace("台", "臺"))
+                if is_alias and alias in message:
+                    mentioned_city_key = city_k
+                    break
+            if mentioned_city_key:
+                break
+        search_order = list(city_districts_map.keys())
+        if mentioned_city_key:
+            search_order = [mentioned_city_key] + [k for k in search_order if k != mentioned_city_key]
+
+        for city_k in search_order:
+            dist_list = city_districts_map[city_k]
             for name_part in dist_list:
                 is_city_alias = (name_part == city_k or name_part == city_k + "市" or name_part == city_k.replace("台", "臺"))
                 if is_city_alias: continue
@@ -243,7 +272,7 @@ class WeatherChatbot:
             if not search_area:
                 search_area = "台中"
                 response_parts = [f"您似乎沒有指定地區，我將為您搜尋'{search_area}'的{place_map[search_type]}。"]
-            resolved_city = self.CITY_NAME_MAP.get(target_region, "臺中市")
+            resolved_city = self.DISTRICT_CITY_OVERRIDE.get(target_district) or self.CITY_NAME_MAP.get(target_region, "臺中市")
             recommended_attractions_df = self.attraction_manager.get_attractions(
                 city=resolved_city, district=(target_district or None), attraction_type=search_type)
             if recommended_attractions_df is not None and not recommended_attractions_df.empty:
@@ -365,8 +394,6 @@ def initialize_session_state():
 
 
 def main():
-    # 宣告我們會在此函式內修改這些 module-level 變數，避免 UnboundLocalError
-    global system_module, get_system_weather_data, SYSTEM_PY_AVAILABLE
 
     st.set_page_config(page_title="個人化氣象決策系統", page_icon="🌤️", layout="wide", initial_sidebar_state="expanded")
     load_css()
@@ -378,17 +405,13 @@ def main():
         user_api_key_input = st.text_input("OpenAI API Key", type="password", key="openai_api_key_input")
         st.caption("此金鑰僅存在於本 session，請勿公開。")
         if user_api_key_input:
-            # 儲存在 session_state 以便同一 session 使用
+            # 只存進session_state（per-session），不寫進os.environ/openai.api_key
+            # 這種process全域狀態——Streamlit常常多個使用者共用同一個process，
+            # 寫全域變數等於A使用者的key可能被B使用者的請求誤用（見ROADMAP.md
+            # 稽核紀錄）。真正呼叫OpenAI時把key當參數往下傳，見main()裡
+            # get_system_weather_data的呼叫。
             st.session_state['user_api_key'] = user_api_key_input
-            try:
-                # 若 system.py 已被成功匯入，動態設定其 openai.api_key
-                if system_module is not None and hasattr(system_module, 'openai'):
-                    system_module.openai.api_key = user_api_key_input
-                # 也放到環境變數（方便其他套件以 env 取得）
-                os.environ['OPENAI_API_KEY'] = user_api_key_input
-                st.success("OpenAI API Key 已設定（僅在此 session 有效）")
-            except Exception:
-                st.error("設定 API Key 時發生錯誤，進階功能可能無法使用。")
+            st.success("OpenAI API Key 已設定（僅在此 session 有效）")
         else:
             # 若 session 中已存在舊金鑰，保持不動；否則顯示提示
             if not st.session_state.get('user_api_key'):
@@ -456,37 +479,29 @@ def main():
                 {"user_input": user_input, "chatbot": st.session_state.chatbot}
             )["should_call_advanced"]
 
-            api_key_available = False
-            if should_call_advanced_preview and SYSTEM_PY_AVAILABLE:
-                # 確認是否有 API Key：優先使用 system_module.openai.api_key -> session_state -> 環境變數
-                try:
-                    if system_module is not None and hasattr(system_module, 'openai') and getattr(system_module.openai, 'api_key', None):
-                        api_key_available = True
-                    elif st.session_state.get('user_api_key'):
-                        if system_module is not None and hasattr(system_module, 'openai'):
-                            system_module.openai.api_key = st.session_state.get('user_api_key')
-                        os.environ['OPENAI_API_KEY'] = st.session_state.get('user_api_key')
-                        api_key_available = True
-                    elif os.getenv('OPENAI_API_KEY'):
-                        if system_module is not None and hasattr(system_module, 'openai'):
-                            system_module.openai.api_key = os.getenv('OPENAI_API_KEY')
-                        api_key_available = True
-                except Exception:
-                    api_key_available = False
+            # 只讀不寫：session自己貼的key優先，否則退回owner在環境變數設的
+            # （本機開發/owner自付費部署才會有這條，公開BYOK部署下通常是空的）。
+            # 不寫回os.environ/openai.api_key這種process全域狀態——見側欄那段
+            # 的說明，避免多使用者共用process時互相洩漏key。
+            effective_api_key = st.session_state.get('user_api_key') or os.getenv('OPENAI_API_KEY')
+            api_key_available = bool(effective_api_key) and should_call_advanced_preview and SYSTEM_PY_AVAILABLE
 
-                if not api_key_available:
-                    st.warning("要使用進階天氣建議功能，請先在左側輸入您的 OpenAI API Key（private）。")
+            if should_call_advanced_preview and SYSTEM_PY_AVAILABLE and not api_key_available:
+                st.warning("要使用進階天氣建議功能，請先在左側輸入您的 OpenAI API Key（private）。")
 
             # LangGraph supervisor + 兩個 worker（WeatherChatbot 輕量路徑／system.py
             # OpenAI 進階路徑）+ 組合節點，取代原本這裡一大段手動 if/else 拼接。
-            # 見 ROADMAP.md Phase 2、code/orchestrator.py。
+            # 見 ROADMAP.md Phase 2、code/orchestrator.py。key當參數傳進closure，
+            # 不靠全域狀態——見上面effective_api_key的說明。
             with st.spinner("正在處理您的請求..."):
                 result = orchestrator.run_orchestrator(
                     user_input=user_input,
                     chatbot=st.session_state.chatbot,
-                    system_weather_fn=lambda prompt, override: get_system_weather_data(prompt, override),
+                    system_weather_fn=lambda prompt, override: get_system_weather_data(
+                        prompt, override, api_key=effective_api_key
+                    ),
                     override_district=sel_dist,
-                    api_key_available=api_key_available and SYSTEM_PY_AVAILABLE,
+                    api_key_available=api_key_available,
                     show_all_cctvs=st.session_state.get('show_all_cctvs_checkbox_value', False),
                 )
 

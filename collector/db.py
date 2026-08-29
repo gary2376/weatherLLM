@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS lodgings (
 );
 CREATE INDEX IF NOT EXISTS idx_lodgings_city_district ON lodgings(city, district);
 
+-- UNIQUE(tdx_id, type, city)：審查發現fetch_transit.py原本沒有唯一鍵，重跑
+-- 腳本會整批重複插入（不像fetch_tourism.py用AttractionID當PK做upsert）。
+-- 三欄一起當唯一鍵，不是只用tdx_id：TDX的parking資料集tdx_id不是全臺唯一，
+-- 同一個小數字id會在不同縣市重複出現（實測案例：id=44分別是新竹市「停七停車場」
+-- 跟宜蘭縣「蘇澳冷泉停車場」，兩個都是真實不同站點，只用tdx_id當唯一鍵會誤刪）。
 CREATE TABLE IF NOT EXISTS transit_stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     station_name TEXT,
@@ -62,7 +67,8 @@ CREATE TABLE IF NOT EXISTS transit_stations (
     latitude REAL,
     longitude REAL,
     source TEXT,
-    fetched_at TEXT
+    fetched_at TEXT,
+    UNIQUE(tdx_id, type, city)
 );
 CREATE INDEX IF NOT EXISTS idx_transit_city_type ON transit_stations(city, type);
 

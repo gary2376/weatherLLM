@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "code"))
@@ -252,3 +253,85 @@ def test_fetch_forecast_open_meteo_matches_target_hour(monkeypatch):
     result = system.fetch_forecast_open_meteo(24.1, 120.6, target_date, target_hour="18:00")
     assert "18:00" in result
     assert "28.0" in result
+
+
+def test_weather_chatbot_resolves_zhubei_to_hsinchu_county_not_city():
+    """審查發現的真bug：city_districts_map把「竹北」歸類在「新竹」分組底下，
+    CITY_NAME_MAP把整個「新竹」分組都對應到新竹市——但竹北市其實屬於新竹縣，
+    查詢會查到錯的縣市。已用DISTRICT_CITY_OVERRIDE校正，這裡驗證修好了。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            captured["district"] = district
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message("竹北有什麼景點")
+    assert captured["city"] == "新竹縣"
+
+
+def test_weather_chatbot_bare_hsinchu_still_resolves_to_hsinchu_city():
+    """確認修正沒有連帶弄壞「新竹」本身（沒指定竹北/湖口/竹東時）預設查新竹市的
+    行為。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message("新竹有什麼景點")
+    assert captured["city"] == "新竹市"
+
+
+@pytest.mark.parametrize("query,expected_city", [
+    ("台北大安區有什麼景點", "臺北市"),  # 大安區台中/台北都有，原本沒看訊息裡的縣市，一律先比對到台中的
+    ("台南北區有什麼景點", "臺南市"),    # 北區台中/台南都有
+    ("台南東區有什麼景點", "臺南市"),    # 東區台中/台南都有
+])
+def test_weather_chatbot_explicit_city_wins_over_same_name_district_in_other_city(query, expected_city):
+    """codex複查時抓到的真bug：city_districts_map裡有幾個同名跨縣市的行政區
+    （大安區/北區/東區），原本比對邏輯不管訊息裡有沒有明確提到縣市，一律照
+    dict順序（台中最先）找到就用——「台北大安區」會被誤判成台中的大安區。已修：
+    訊息裡有明確提到某縣市時，該縣市的行政區清單優先比對。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message(query)
+    assert captured["city"] == expected_city
+
+
+def test_weather_chatbot_ambiguous_district_without_city_still_defaults_to_taichung():
+    """沒有明確縣市、行政區名稱本身又同名跨縣市時（例如單獨問「北區」），維持
+    原本的預設行為（退回台中），不強制猜城市——這種情況本來就無法從文字判斷，
+    跟審查時codex確認過的「已知限制」一致，不是這次要修的範圍。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message("北區有什麼景點")
+    assert captured["city"] == "臺中市"

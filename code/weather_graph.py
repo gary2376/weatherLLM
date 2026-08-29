@@ -22,6 +22,7 @@ class WeatherState(TypedDict, total=False):
     user_prompt: str
     area_override: Optional[str]
     city_override: Optional[str]
+    api_key: Optional[str]
     info: dict
     query_type: Optional[str]
     area: Optional[str]
@@ -36,7 +37,7 @@ class WeatherState(TypedDict, total=False):
 def _make_intent_node(sysmod):
     def intent_node(state: WeatherState) -> WeatherState:
         try:
-            info = sysmod.analyze_prompt_with_llm(state["user_prompt"])
+            info = sysmod.analyze_prompt_with_llm(state["user_prompt"], api_key=state.get("api_key"))
         except Exception as e:
             return {"error": sysmod._make_safe(f"{sysmod.ERROR_PREFIX} Prompt 分析階段出錯：{e}")}
 
@@ -120,9 +121,17 @@ def _make_attraction_node(sysmod):
     def attraction_node(state: WeatherState) -> WeatherState:
         if state.get("error"):
             return {}
-        attractions = sysmod._get_places_for_area(
-            state["user_prompt"], state["area"], state["city"], "attraction", top_n=5
-        )
+        # `_get_places_for_area()` 只包住RAG那段的例外（RAG不可用時退回SQL查詢），
+        # 退回路徑本身（`get_attractions_for_area()`）沒有防護——DB出錯之類的例外
+        # 會直接往上炸穿整個graph，跟Phase2「單一node失敗要優雅退回」的系統邊界
+        # 承諾不符。這裡補上，失敗就當作查無資料處理（synthesis_node本來就有
+        # 「抱歉沒有景點資料」的空清單分支），不讓整個回覆掛掉。
+        try:
+            attractions = sysmod._get_places_for_area(
+                state["user_prompt"], state["area"], state["city"], "attraction", top_n=5
+            )
+        except Exception:
+            attractions = []
         return {"attractions": attractions}
 
     return attraction_node
@@ -132,9 +141,12 @@ def _make_lodging_node(sysmod):
     def lodging_node(state: WeatherState) -> WeatherState:
         if state.get("error"):
             return {}
-        lodgings = sysmod._get_places_for_area(
-            state["user_prompt"], state["area"], state["city"], "lodging", top_n=3
-        )
+        try:
+            lodgings = sysmod._get_places_for_area(
+                state["user_prompt"], state["area"], state["city"], "lodging", top_n=3
+            )
+        except Exception:
+            lodgings = []
         return {"lodgings": lodgings}
 
     return lodging_node
@@ -165,7 +177,9 @@ def _make_synthesis_node(sysmod):
             raw_data += f"\n\n🏨 抱歉，目前沒有「{area}」的住宿資料可供推薦。\n"
 
         start_time = time.time()
-        generated_summary = sysmod.generate_answer_from_user_prompt_and_data(state["user_prompt"], raw_data)
+        generated_summary = sysmod.generate_answer_from_user_prompt_and_data(
+            state["user_prompt"], raw_data, api_key=state.get("api_key")
+        )
         elapsed = time.time() - start_time
 
         llm_response_with_header = f"回應建議（回應耗時 {elapsed:.2f} 秒）：\n{generated_summary}"
@@ -222,12 +236,14 @@ def run_weather_graph(
     user_prompt: str,
     area_override: Optional[str] = None,
     city_override: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> str:
     graph = _get_graph(sysmod)
     initial_state: WeatherState = {
         "user_prompt": user_prompt,
         "area_override": area_override,
         "city_override": city_override,
+        "api_key": api_key,
     }
     final_state = graph.invoke(initial_state, config={"recursion_limit": MAX_GRAPH_STEPS})
     return final_state.get("final_answer") or sysmod._make_safe(f"{sysmod.ERROR_PREFIX} graph 執行未產生回覆。")
