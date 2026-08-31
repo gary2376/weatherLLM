@@ -600,10 +600,34 @@ def _wants_indoor(user_prompt: str) -> bool:
     return any(kw in user_prompt for kw in RAIN_OR_INDOOR_KEYWORDS)
 
 
+def _score_node_failure(layer: str, failed: bool) -> None:
+    """幫每個LangGraph節點各自記一個失敗信號，不是全部混在一起的單一布林值。
+
+    原本只有 `_score_rag_fallback()` 這一個信號，代表「RAG查詢是不是退回了
+    repository純名稱清單」——但這樣後台看到失敗率升高時，分不出是RAG索引壞了、
+    還是OpenAI逾時、還是LLM回傳格式解析不了、還是Open-Meteo掛了，四種完全不同
+    的問題在Langfuse上長得一樣，沒辦法對症下藥。改成用 `layer` 當作分類
+    （"intent"／"weather"／"rag_fallback"／"synthesis"），可以在後台個別看
+    每一層的失敗率趨勢，不用全部混在一起猜是哪裡出問題。
+
+    正常/失敗都要記（不是只記失敗），Langfuse才算得出正確的失敗率分母——這點跟
+    原本 `_score_rag_fallback()` 的做法一致。Langfuse沒設定時直接跳過，不影響
+    天氣查詢本身。"""
+    if not LANGFUSE_TRACING:
+        return
+    try:
+        from langfuse import get_client
+        get_client().score_current_span(
+            name=f"node_failure_{layer}", value=1.0 if failed else 0.0, data_type="BOOLEAN"
+        )
+    except Exception:
+        pass
+
+
 def _score_rag_fallback(fell_back: bool) -> None:
-    """幫Phase 5可觀測性補的信號：RAG查詢是不是退回了repository純名稱清單。
-    fallback比例突然升高代表RAG層本身出問題（索引壞掉、依賴缺失等），比單純LLM
-    延遲更早能看出RAG層健康度。Langfuse沒設定時直接跳過，不影響天氣查詢本身。"""
+    """`_score_node_failure("rag_fallback", ...)` 的相容包裝——保留原本的
+    score名稱（"rag_fallback"）不變，避免既有Langfuse後台設定的儀表板/篩選條件
+    因為改名字而失效。"""
     if not LANGFUSE_TRACING:
         return
     try:

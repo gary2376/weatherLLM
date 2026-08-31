@@ -39,6 +39,7 @@ def _make_intent_node(sysmod):
         try:
             info = sysmod.analyze_prompt_with_llm(state["user_prompt"], api_key=state.get("api_key"))
         except Exception as e:
+            sysmod._score_node_failure("intent", True)
             return {"error": sysmod._make_safe(f"{sysmod.ERROR_PREFIX} Prompt 分析階段出錯：{e}")}
 
         area = info.get("area")
@@ -49,8 +50,10 @@ def _make_intent_node(sysmod):
             city = state["city_override"]
 
         if not area:
+            sysmod._score_node_failure("intent", True)
             return {"error": sysmod._make_safe(f"{sysmod.ERROR_PREFIX} 無法辨識您想查詢的區域。")}
 
+        sysmod._score_node_failure("intent", False)
         return {"info": info, "query_type": info.get("type"), "area": area, "city": city}
 
     return intent_node
@@ -71,10 +74,12 @@ def _make_weather_node(sysmod):
             date_str = info.get("date")
             hour = info.get("hour", "06:00")
             if not date_str:
+                sysmod._score_node_failure("weather", True)
                 return {"error": sysmod._make_safe(f"{sysmod.ERROR_PREFIX} 預報查詢需要有效日期。")}
             try:
                 target_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except ValueError:
+                sysmod._score_node_failure("weather", True)
                 return {"error": sysmod._make_safe(f"{sysmod.ERROR_PREFIX} 日期格式錯誤 ({date_str})，應為 YYYY-MM-DD。")}
 
             if hour and isinstance(hour, str) and hour not in ["06:00", "18:00"]:
@@ -94,11 +99,13 @@ def _make_weather_node(sysmod):
 
             raw_data = sysmod.fetch_forecast_data(area, city, target_date=target_date, target_hour=hour)
         else:
+            sysmod._score_node_failure("weather", True)
             return {"error": sysmod._make_safe(
                 f"{sysmod.ERROR_PREFIX} 無法辨識查詢類型 (應為 'radar' 或 'forecast')。LLM 回應 type: {query_type or '未提供'}"
             )}
 
         if raw_data.startswith((sysmod.WARN_PREFIX, sysmod.ERROR_PREFIX)):
+            sysmod._score_node_failure("weather", True)
             return {"error": raw_data}
 
         try:
@@ -112,6 +119,7 @@ def _make_weather_node(sysmod):
         except Exception:
             pass
 
+        sysmod._score_node_failure("weather", False)
         return {"raw_data": raw_data}
 
     return weather_node
@@ -181,6 +189,11 @@ def _make_synthesis_node(sysmod):
             state["user_prompt"], raw_data, api_key=state.get("api_key")
         )
         elapsed = time.time() - start_time
+
+        # generate_answer_from_user_prompt_and_data() 自己接住例外、回傳
+        # ERROR_PREFIX開頭的字串而不是往上拋，所以這裡用字串前綴判斷成敗，
+        # 不是try/except。
+        sysmod._score_node_failure("synthesis", generated_summary.startswith(sysmod.ERROR_PREFIX))
 
         llm_response_with_header = f"回應建議（回應耗時 {elapsed:.2f} 秒）：\n{generated_summary}"
         return {"final_answer": sysmod._make_safe(llm_response_with_header)}

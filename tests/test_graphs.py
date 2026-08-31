@@ -30,6 +30,7 @@ def _make_fake_sysmod(**overrides):
             ["某景點"] if place_type == "attraction" else ["某住宿"]
         ),
         generate_answer_from_user_prompt_and_data=lambda user_prompt, raw_data, api_key=None: "這是最終建議文字",
+        _score_node_failure=lambda layer, failed: None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -100,6 +101,47 @@ def test_weather_graph_intent_error_short_circuits_downstream_nodes():
     assert "LLM掛了" in result
     # intent_node 出錯後，其他節點應該直接跳過，不執行外部呼叫
     assert calls == {"weather": 0, "attraction": 0, "synthesis": 0}
+
+
+def test_weather_graph_tags_per_node_failure_not_just_one_flag():
+    """審查（FDE面試指南比對）發現原本只有單一rag_fallback布林值，分不出
+    intent/weather/synthesis到底是哪一層出錯。驗證每個節點失敗時都標記到
+    正確的layer名稱，成功時也要標記False（Langfuse失敗率分母才會對）。"""
+    scores = []
+    sysmod = _make_fake_sysmod(_score_node_failure=lambda layer, failed: scores.append((layer, failed)))
+    weather_graph.run_weather_graph(sysmod, "西屯區明天天氣如何")
+    assert ("intent", False) in scores
+    assert ("weather", False) in scores
+    assert ("synthesis", False) in scores
+
+
+def test_weather_graph_tags_intent_failure_on_llm_exception():
+    scores = []
+
+    def boom(prompt, api_key=None):
+        raise RuntimeError("LLM掛了")
+
+    sysmod = _make_fake_sysmod(
+        analyze_prompt_with_llm=boom,
+        _score_node_failure=lambda layer, failed: scores.append((layer, failed)),
+    )
+    weather_graph.run_weather_graph(sysmod, "隨便問點什麼")
+    assert ("intent", True) in scores
+    # intent失敗後續節點應該被跳過，不該有weather/synthesis的記錄
+    assert not any(layer == "weather" for layer, _ in scores)
+
+
+def test_weather_graph_tags_synthesis_failure_via_error_prefix():
+    """generate_answer_from_user_prompt_and_data() 是自己接住例外回傳
+    ERROR_PREFIX字串，不是往上拋例外——驗證synthesis_node用字串前綴正確判斷
+    成敗，不是誤判成功。"""
+    scores = []
+    sysmod = _make_fake_sysmod(
+        generate_answer_from_user_prompt_and_data=lambda p, r, api_key=None: "ERROR: LLM 呼叫失敗：boom",
+        _score_node_failure=lambda layer, failed: scores.append((layer, failed)),
+    )
+    weather_graph.run_weather_graph(sysmod, "西屯區明天天氣如何")
+    assert ("synthesis", True) in scores
 
 
 def test_weather_graph_area_override_wins_over_llm_parsed_area():
