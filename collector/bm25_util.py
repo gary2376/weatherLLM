@@ -34,6 +34,18 @@ def build_and_save(docs: list) -> int:
     return len(docs)
 
 
+# 系統邊界（見 ROADMAP.md Phase 4）：`hybrid_search.py::search()` 原本每次查詢
+# 都呼叫這個函式，代表每次查詢都要重新從硬碟反序列化整個BM25索引（14000+筆文件
+# 的斷詞結果+BM25Okapi物件）——這不是「重複查詢才浪費」，是每一次查詢都在做的
+# 浪費。改成lazy singleton，跟 `code/rag.py::_get_collection()` 對Chroma client
+# 的快取是同一個模式：索引檔案只在`build_embeddings.py`重建索引時才會變，
+# runtime過程中不會變，process生命週期內快取一次是安全的。
+_index_cache = None
+
+
 def load() -> dict:
-    with open(BM25_INDEX_PATH, "rb") as f:
-        return pickle.load(f)
+    global _index_cache
+    if _index_cache is None:
+        with open(BM25_INDEX_PATH, "rb") as f:
+            _index_cache = pickle.load(f)
+    return _index_cache

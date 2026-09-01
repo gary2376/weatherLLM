@@ -45,6 +45,7 @@ else:
         return _decorator
 
 import json
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -455,6 +456,31 @@ def get_latest_radar_summary(radar_dir: str = r"E:\python_project\contest\TGIS\r
         return f"（讀取 radar/遠端降水摘要時發生錯誤：{e}）"
 
 
+# 系統邊界（見 ROADMAP.md Phase 4）：同一個座標短時間內被重複查詢時（同一縣市/
+# 行政區被不同訪客或同一訪客重複問），不用每次都重打 Open-Meteo，省下延遲也保護
+# 免費方案的對外請求額度——這跟rate limit是同一個動機，不是為了省OpenAI的錢
+# （Open-Meteo本來就免費）。用TTL而不是`functools.lru_cache`：天氣資料真的會過期，
+# 不能無限快取，10分鐘內的重複查詢才值得共用結果。只快取成功結果，錯誤/空資料
+# 不快取（可能是暫時性問題，快取住反而拖長使用者感受到的異常時間）。
+WEATHER_CACHE_TTL_SECONDS = 600
+_weather_cache: dict = {}
+
+
+def _weather_cache_get(key: tuple) -> Optional[str]:
+    entry = _weather_cache.get(key)
+    if entry is None:
+        return None
+    value, expires_at = entry
+    if time.time() > expires_at:
+        del _weather_cache[key]
+        return None
+    return value
+
+
+def _weather_cache_set(key: tuple, value: str) -> None:
+    _weather_cache[key] = (value, time.time() + WEATHER_CACHE_TTL_SECONDS)
+
+
 def fetch_precipitation_open_meteo(area: Optional[str] = None, city: str = DEFAULT_CITY, lat: Optional[float] = None, lon: Optional[float] = None) -> str:
     """
     使用 Open-Meteo 取得最近數小時的降雨量（作為 radar 的替代），若有 area 會查
@@ -463,6 +489,11 @@ def fetch_precipitation_open_meteo(area: Optional[str] = None, city: str = DEFAU
     try:
         if lat is None or lon is None:
             lat, lon = _resolve_coords(area, city)
+
+        cache_key = ("precipitation", lat, lon)
+        cached = _weather_cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         # 取得最近 6 小時的 hourly precipitation
         url = (
@@ -483,6 +514,7 @@ def fetch_precipitation_open_meteo(area: Optional[str] = None, city: str = DEFAU
         summary = "Open-Meteo 降雨量摘要：\n"
         for t, pval in zip(times[-last_n:], prec[-last_n:]):
             summary += f"  - {t}: 降水量 {pval} mm\n"
+        _weather_cache_set(cache_key, summary)
         return summary
     except Exception as e:
         return f"（取得遠端降水資料時發生錯誤：{e}）"
@@ -497,6 +529,12 @@ def fetch_current_weather_open_meteo(lat: float = 24.1477, lon: float = 120.6736
         # 如果有提供區域名稱，查 district_coords 表取得座標
         if area:
             lat, lon = _resolve_coords(area, city)
+
+        cache_key = ("current", lat, lon)
+        cached = _weather_cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         url = (
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
             "&current_weather=true&timezone=Asia/Taipei"
@@ -512,6 +550,7 @@ def fetch_current_weather_open_meteo(lat: float = 24.1477, lon: float = 120.6736
         wc = cw.get('weathercode')
         time_str = cw.get('time')
         summary = f"即時天氣 (Open-Meteo) - 時間: {time_str}, 氣溫: {t}°C, 風速: {ws} m/s, weathercode: {wc}"
+        _weather_cache_set(cache_key, summary)
         return summary
     except Exception as e:
         return f"（取得即時天氣時發生錯誤：{e}）"
@@ -546,6 +585,12 @@ def fetch_forecast_open_meteo(lat: float, lon: float, target_date: datetime, tar
     try:
         # Open-Meteo 接口: 取得當日 hourly 與 daily 資料
         date_str = target_date.strftime("%Y-%m-%d")
+
+        cache_key = ("forecast", lat, lon, date_str, target_hour)
+        cached = _weather_cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         url = (
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
             "&hourly=temperature_2m,precipitation,weathercode&windspeed_unit=ms&timezone=Asia/Taipei"
@@ -583,6 +628,7 @@ def fetch_forecast_open_meteo(lat: float, lon: float, target_date: datetime, tar
             result += f"  當日最高 {max(temps_f):.1f}°C, 最低 {min(temps_f):.1f}°C, 總降水 {sum(prec_f):.1f} mm\n"
         except Exception:
             pass
+        _weather_cache_set(cache_key, result)
         return result
     except Exception as e:
         return f"（使用 Open-Meteo 取得預報時發生錯誤：{e}）"

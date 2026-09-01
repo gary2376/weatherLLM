@@ -9,6 +9,7 @@ eval/ 的評估結果），BM25 補上這塊字面比對的訊號，兩者互補
 再呼叫 search()。
 """
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -54,6 +55,23 @@ def search(
     weather_fit: Optional[Union[str, List[str]]] = None,
     top_k: int = 5,
 ) -> list:
+    """完全相同的查詢參數會走 `_search_cached()` 的快取（見 ROADMAP.md
+    Phase 4）——不只省語意檢索那段，`_bm25_ranked_ids()` 對全部文件的線性掃描
+    也一起省掉，不是只快取最後的RRF排序結果。"""
+    weather_fit_key = tuple(weather_fit) if isinstance(weather_fit, list) else weather_fit
+    return _search_cached(query, city, district, type_, weather_fit_key, top_k)
+
+
+@lru_cache(maxsize=512)
+def _search_cached(
+    query: str,
+    city: Optional[str],
+    district: Optional[str],
+    type_: Optional[str],
+    weather_fit_key,
+    top_k: int,
+) -> list:
+    weather_fit = list(weather_fit_key) if isinstance(weather_fit_key, tuple) else weather_fit_key
     index = bm25_util.load()
     bm25_ids = _bm25_ranked_ids(query, city, district, type_, weather_fit, index)
     semantic_hits = rag.search(

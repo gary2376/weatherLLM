@@ -8,6 +8,7 @@ OpenAI API：使用者每次打字查詢都要重新算一次 embedding，用付
 本地 ONNX 模型下載一次後永久免費、CPU 就能跑。
 """
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -44,7 +45,28 @@ def search(
     query 是模糊偏好。city/district 一律「台→臺」正規化，跟 repository.py 同規則
     （資料源存官方全名）。weather_fit 只有 attractions 有這個 metadata 欄位
     （indoor_ok/outdoor_only/mixed/unknown，見 collector/attraction_classes.py），
-    傳list（如["indoor_ok","mixed"]）可以一次接受多個值，用 Chroma 的 $in。"""
+    傳list（如["indoor_ok","mixed"]）可以一次接受多個值，用 Chroma 的 $in。
+
+    完全相同的查詢參數會走 `_search_cached()` 的快取（見 ROADMAP.md Phase 4），
+    這裡先把 `weather_fit` 可能是list的情況轉成tuple——`functools.lru_cache`
+    要求所有參數可雜湊，list不行。"""
+    weather_fit_key = tuple(weather_fit) if isinstance(weather_fit, list) else weather_fit
+    return _search_cached(query, city, district, type_, weather_fit_key, top_k)
+
+
+@lru_cache(maxsize=512)
+def _search_cached(
+    query: str,
+    city: Optional[str],
+    district: Optional[str],
+    type_: Optional[str],
+    weather_fit_key,
+    top_k: int,
+) -> list[dict]:
+    """呼叫端不要直接呼叫這個，走上面的 `search()`——它負責把 `weather_fit`
+    正規化成可雜湊的key。快取回傳的是同一個list/dict物件，呼叫端不應該原地修改
+    回傳值（目前專案裡所有呼叫端都只讀不改，沒有這個問題）。"""
+    weather_fit = list(weather_fit_key) if isinstance(weather_fit_key, tuple) else weather_fit_key
     where_clauses = []
     if city:
         where_clauses.append({"city": city.replace("台", "臺")})
