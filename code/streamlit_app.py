@@ -489,6 +489,23 @@ def main():
             if should_call_advanced_preview and SYSTEM_PY_AVAILABLE and not api_key_available:
                 st.warning("要使用進階天氣建議功能，請先在左側輸入您的 OpenAI API Key（private）。")
 
+            # 多輪對話 Structured State（見 ROADMAP.md Phase 2 SCOPE 設計草案）：
+            # 上一輪解析出的 info（city/area/date/hour）存在 session_state，這輪
+            # 當 previous_info 傳進去，讓「那附近有推薦餐廳嗎」這種沒有重講地點
+            # 的問句能延續上一輪的地點。這裡只負責讀寫 session_state 這個
+            # Streamlit-only 動作，實際的繼承/覆寫判斷邏輯在
+            # weather_graph.py::_make_intent_node()，不碰 session_state。
+            def _call_system_weather(prompt, override):
+                info_out: dict = {}
+                answer = get_system_weather_data(
+                    prompt, override, api_key=effective_api_key,
+                    previous_info=st.session_state.get('last_weather_info'),
+                    info_out=info_out,
+                )
+                if info_out:
+                    st.session_state['last_weather_info'] = info_out
+                return answer
+
             # LangGraph supervisor + 兩個 worker（WeatherChatbot 輕量路徑／system.py
             # OpenAI 進階路徑）+ 組合節點，取代原本這裡一大段手動 if/else 拼接。
             # 見 ROADMAP.md Phase 2、code/orchestrator.py。key當參數傳進closure，
@@ -497,9 +514,7 @@ def main():
                 result = orchestrator.run_orchestrator(
                     user_input=user_input,
                     chatbot=st.session_state.chatbot,
-                    system_weather_fn=lambda prompt, override: get_system_weather_data(
-                        prompt, override, api_key=effective_api_key
-                    ),
+                    system_weather_fn=_call_system_weather,
                     override_district=sel_dist,
                     api_key_available=api_key_available,
                     show_all_cctvs=st.session_state.get('show_all_cctvs_checkbox_value', False),

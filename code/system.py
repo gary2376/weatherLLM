@@ -423,7 +423,10 @@ def fetch_radar_data(area: Optional[str], city: str = DEFAULT_CITY, limit: int =
         return _make_safe(f"{ERROR_PREFIX} 雷達資料查詢錯誤（Open‑Meteo）：{e}")
 
 
-def get_latest_radar_summary(radar_dir: str = r"E:\python_project\contest\TGIS\radar") -> str:
+DEFAULT_RADAR_DIR = Path(__file__).resolve().parents[1] / "Data" / "radar"
+
+
+def get_latest_radar_summary(radar_dir: str = str(DEFAULT_RADAR_DIR)) -> str:
     """
     讀取本地 radar/ 目錄，找最新的 XML 檔，回傳簡短摘要（檔名、修改時間、若能解析則回傳根節點資訊）。
     此函式不依賴遠端 API，適合作為本機 RAG 的一部分。
@@ -472,7 +475,12 @@ def _weather_cache_get(key: tuple) -> Optional[str]:
         return None
     value, expires_at = entry
     if time.time() > expires_at:
-        del _weather_cache[key]
+        # `_weather_cache`是跨session共用的module-level dict，Streamlit預設
+        # 用thread pool同時處理多個session的請求——兩個請求同時讀到同一把過期
+        # 的key時，先到的那個`del`完，後到的那個再`del`會拿不到key直接
+        # `KeyError`。用`.pop(key, None)`吃掉「已經被別的請求清掉了」這個
+        # 正常情況，不是真的錯誤。
+        _weather_cache.pop(key, None)
         return None
     return value
 
@@ -718,6 +726,8 @@ def get_weather_data(
     area_override: Optional[str] = None,
     city_override: Optional[str] = None,
     api_key: Optional[str] = None,
+    previous_info: Optional[dict] = None,
+    info_out: Optional[dict] = None,
 ) -> str:
     """
     主要入口：交給 `weather_graph.py` 的 LangGraph 節點圖執行：
@@ -735,9 +745,18 @@ def get_weather_data(
     `api_key`：審查發現的安全性修正，見 `_create_chat_completion()` 的說明——
     Streamlit 多使用者共用一個process時，不能用寫入`os.environ`的方式傳金鑰
     （會跨session洩漏），改成一路當參數往下傳到真正建立OpenAI client那一刻。
+
+    `previous_info`/`info_out`：多輪對話 Structured State（見 ROADMAP.md Phase 2
+    的 SCOPE 設計草案，實作見 `weather_graph.py::_make_intent_node()`）。呼叫端
+    （目前是 `streamlit_app.py`）把上一輪的info存在`st.session_state`裡，這輪
+    當`previous_info`傳進來，再傳一個空dict當`info_out`接住這輪解析完的最終
+    info，存回session_state給下一輪用。這個函式跟`weather_graph.run_weather_graph()`
+    一樣不直接處理Streamlit session_state——維持Phase 2訂下的「這幾個模組不碰
+    streamlit」邊界。
     """
     return weather_graph.run_weather_graph(
-        sys.modules[__name__], user_prompt, area_override, city_override, api_key=api_key
+        sys.modules[__name__], user_prompt, area_override, city_override,
+        api_key=api_key, previous_info=previous_info, info_out=info_out,
     )
 
 if __name__ == "__main__":

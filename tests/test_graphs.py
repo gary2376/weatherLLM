@@ -158,6 +158,76 @@ def test_weather_graph_area_override_wins_over_llm_parsed_area():
     assert seen["city"] == "臺中市"
 
 
+def test_weather_graph_inherits_area_city_from_previous_info_when_area_missing():
+    """「那附近有推薦餐廳嗎」這種沒有重講地點的問句，LLM解析不出area時，
+    應該繼承上一輪的area/city，而不是直接進錯誤分支。"""
+    sysmod = _make_fake_sysmod(
+        analyze_prompt_with_llm=lambda prompt, api_key=None: {"type": "radar", "city": "臺中市"},
+    )
+    info_out = {}
+    result = weather_graph.run_weather_graph(
+        sysmod, "那附近有推薦餐廳嗎",
+        previous_info={"area": "鹽埕區", "city": "高雄市", "date": "2026-01-02", "hour": "18:00"},
+        info_out=info_out,
+    )
+    assert "這是最終建議文字" in result
+    assert info_out["area"] == "鹽埕區"
+    assert info_out["city"] == "高雄市"  # 不是LLM這輪預設回傳的臺中市
+
+
+def test_weather_graph_does_not_inherit_stale_city_when_new_city_has_no_area():
+    """回歸測試（codex審查抓到的真bug）：上一輪問臺北市大安區，這輪問「那高雄呢」
+    ——LLM正確解析出city=高雄市，但沒有area。原本的邏輯只看area是否缺席就無條件
+    繼承上一輪的city，會把這輪明確講的高雄市蓋掉、變成查詢「高雄市大安區」這種
+    不存在的組合。修正後：city不等於DEFAULT_CITY時代表使用者這輪明確講了新縣市，
+    不該繼承，維持原本「無法辨識您想查詢的區域」的錯誤。"""
+    sysmod = _make_fake_sysmod(
+        analyze_prompt_with_llm=lambda prompt, api_key=None: {"type": "radar", "city": "高雄市"},
+    )
+    result = weather_graph.run_weather_graph(
+        sysmod, "那高雄呢",
+        previous_info={"area": "大安區", "city": "臺北市"},
+    )
+    assert "ERROR:" in result
+    assert "無法辨識您想查詢的區域" in result
+
+
+def test_weather_graph_does_not_inherit_when_new_area_is_resolved():
+    """這輪LLM有解析出新area，代表使用者明確換了地點，不該被上一輪蓋掉。"""
+    sysmod = _make_fake_sysmod()  # 固定回傳 area=西屯區, city=臺中市
+    info_out = {}
+    weather_graph.run_weather_graph(
+        sysmod, "西屯區明天天氣如何",
+        previous_info={"area": "鹽埕區", "city": "高雄市"},
+        info_out=info_out,
+    )
+    assert info_out["area"] == "西屯區"
+    assert info_out["city"] == "臺中市"
+
+
+def test_weather_graph_without_previous_info_still_errors_on_missing_area():
+    """沒有previous_info可繼承時（例如對話的第一輪），維持原本「無法辨識區域」
+    的錯誤行為，不因為加了多輪對話功能而改變單輪場景。"""
+    sysmod = _make_fake_sysmod(
+        analyze_prompt_with_llm=lambda prompt, api_key=None: {"type": "radar", "city": "臺中市"},
+    )
+    result = weather_graph.run_weather_graph(sysmod, "那附近有推薦餐廳嗎")
+    assert "ERROR:" in result
+    assert "無法辨識您想查詢的區域" in result
+
+
+def test_weather_graph_info_out_reflects_area_override_not_raw_llm_guess():
+    """override（例如UI下拉選單指定行政區）贏過LLM解析結果時，寫回`info_out`的
+    也應該是override後的值，這樣下一輪繼承到的才是「這輪真正查詢的地點」。"""
+    sysmod = _make_fake_sysmod()  # LLM固定猜 area=西屯區
+    info_out = {}
+    weather_graph.run_weather_graph(
+        sysmod, "問句", area_override="北屯區", city_override="臺中市", info_out=info_out,
+    )
+    assert info_out["area"] == "北屯區"
+    assert info_out["city"] == "臺中市"
+
+
 class _FakeChatbot:
     general_weather_query_keywords = ["天氣", "氣象"]
     weather_phenomenon_keywords = {"下雨": "降雨"}

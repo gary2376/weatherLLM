@@ -23,6 +23,7 @@ class WeatherState(TypedDict, total=False):
     area_override: Optional[str]
     city_override: Optional[str]
     api_key: Optional[str]
+    previous_info: Optional[dict]
     info: dict
     query_type: Optional[str]
     area: Optional[str]
@@ -42,12 +43,45 @@ def _make_intent_node(sysmod):
             sysmod._score_node_failure("intent", True)
             return {"error": sysmod._make_safe(f"{sysmod.ERROR_PREFIX} Prompt 分析階段出錯：{e}")}
 
+        # 多輪對話 Structured State（見 ROADMAP.md Phase 2 的 SCOPE 設計草案）：
+        # `analyze_prompt_with_llm()` 只看得到這一輪的文字，沒有累積中的context。
+        # 這輪解析不出area時才視為延續上一輪（例如「那附近有推薦餐廳嗎」）——
+        # 但只有這輪的city「等於LLM system prompt規定的預設值DEFAULT_CITY」時
+        # 才真的繼承：LLM沒被要求分辨「使用者真的講了臺中市」跟「使用者沒講、
+        # 系統prompt要求預設臺中市」，這輪的city欄位無法區分這兩種情況，只能用
+        # 「city是不是剛好等於DEFAULT_CITY」當一個不完美但可行的信號。
+        # 這樣才不會發生：上一輪問臺北市大安區，這輪問「那高雄呢」（LLM正確
+        # 解析出city=高雄市、area仍缺），卻被上一輪的臺北市蓋掉、變成查詢
+        # 高雄市大安區這種不存在的組合——city不是DEFAULT_CITY時代表使用者這輪
+        # 明確講了新縣市，不繼承任何欄位，維持原本「無法辨識您想查詢的區域」
+        # 的錯誤，讓使用者補講清楚要問哪個行政區。
+        # 已知限制：如果使用者這輪明確問的剛好就是DEFAULT_CITY本身（例如上一輪
+        # 問高雄市三民區，這輪問「台中天氣如何」，沒提行政區），會被誤判成延續
+        # 而錯誤套用上一輪的高雄市三民區——這是上面同一個「LLM分不出真講/預設」
+        # 的限制的另一面，出現機率低（DEFAULT_CITY只有臺中市一個），不特別處理。
+        previous_info = state.get("previous_info")
+        if (
+            not info.get("area")
+            and previous_info
+            and previous_info.get("area")
+            and info.get("city") == sysmod.DEFAULT_CITY
+        ):
+            info["area"] = previous_info.get("area")
+            info["city"] = previous_info.get("city") or info.get("city")
+            for field in ("date", "hour"):
+                if not info.get(field) and previous_info.get(field):
+                    info[field] = previous_info[field]
+
         area = info.get("area")
         city = info.get("city") or sysmod.DEFAULT_CITY
         if state.get("area_override"):
             area = state["area_override"]
         if state.get("city_override"):
             city = state["city_override"]
+        # 把override後的最終值同步回info，這是要往下一輪傳的Structured State
+        # ——下一輪繼承的應該是「這輪實際查詢的地點」，不是override前的LLM原始猜測
+        info["area"] = area
+        info["city"] = city
 
         if not area:
             sysmod._score_node_failure("intent", True)
@@ -202,9 +236,11 @@ def _make_synthesis_node(sysmod):
 
 
 # 系統邊界：graph 最大步驟數上限（見 ROADMAP.md Phase 2 系統邊界項目）。這個圖
-# 目前是固定5個節點的線性流程（分支只是平行，不是迴圈），15步是安全上限，不是
-# 實際會用到的值——之後如果加 checkpointing 支援多輪對話，這個上限才會是真的
-# 有意義的防呆。
+# 是固定5個節點的線性流程（分支只是平行，不是迴圈），15步是安全上限，不是實際
+# 會用到的值。多輪對話（`previous_info`/`info_out`）不是靠LangGraph checkpointer
+# 讓同一個graph執行內跑迴圈——每一輪對話仍是獨立一次`graph.invoke()`（5個節點
+# 走完就結束），只是呼叫端在兩次invoke之間，把上一輪的info當這一輪的輸入傳進來，
+# 所以這個步驟上限跟多輪對話是否啟用無關，兩者都一樣是15。
 MAX_GRAPH_STEPS = 15
 
 
@@ -250,13 +286,23 @@ def run_weather_graph(
     area_override: Optional[str] = None,
     city_override: Optional[str] = None,
     api_key: Optional[str] = None,
+    previous_info: Optional[dict] = None,
+    info_out: Optional[dict] = None,
 ) -> str:
+    """`previous_info`：上一輪 intent_node 解析出的 info dict（多輪對話延續用，
+    見 `_make_intent_node`）。`info_out`：呼叫端傳一個空dict進來，圖執行完會被
+    `.update()`成這一輪最終的info——呼叫端存起來，下一輪當`previous_info`傳回來，
+    這樣就不用改變這個函式原本回傳單一字串的介面（改回傳tuple要動到所有呼叫端，
+    這裡只有真的要做多輪對話的呼叫端才需要多傳這個參數）。"""
     graph = _get_graph(sysmod)
     initial_state: WeatherState = {
         "user_prompt": user_prompt,
         "area_override": area_override,
         "city_override": city_override,
         "api_key": api_key,
+        "previous_info": previous_info,
     }
     final_state = graph.invoke(initial_state, config={"recursion_limit": MAX_GRAPH_STEPS})
+    if info_out is not None:
+        info_out.update(final_state.get("info") or {})
     return final_state.get("final_answer") or sysmod._make_safe(f"{sysmod.ERROR_PREFIX} graph 執行未產生回覆。")

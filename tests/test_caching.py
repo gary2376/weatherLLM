@@ -42,6 +42,21 @@ def test_weather_cache_miss_returns_none():
     assert system._weather_cache_get(("從沒存過的key", 0, 0)) is None
 
 
+def test_weather_cache_get_on_already_removed_expired_key_does_not_raise(monkeypatch):
+    """回歸測試（codex審查抓到的真bug）：`_weather_cache`是跨session共用的
+    module-level dict，兩個並發請求同時讀到同一把過期的key時，先到的那個
+    刪掉key後，後到的那個原本用`del`會拿KeyError。這裡直接模擬「key已經被
+    別的請求先清掉」的狀態，驗證第二次呼叫不會炸掉。"""
+    now = [1000.0]
+    monkeypatch.setattr(system.time, "time", lambda: now[0])
+    system._weather_cache.clear()
+    key = ("test", 1.0, 2.0)
+    system._weather_cache_set(key, "cached value")
+    now[0] += system.WEATHER_CACHE_TTL_SECONDS + 1
+    del system._weather_cache[key]  # 模擬另一個並發請求已經搶先清掉了
+    assert system._weather_cache_get(key) is None
+
+
 def test_fetch_current_weather_uses_cache_on_second_call(monkeypatch):
     """驗證的是`fetch_current_weather_open_meteo()`本身有沒有真的走快取，
     不是只測快取工具函式本身。"""
