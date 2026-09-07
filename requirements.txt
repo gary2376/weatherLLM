@@ -14,3 +14,4 @@ rank_bm25
 jieba
 langfuse
 langgraph
+mcp[cli]>=2.0.0

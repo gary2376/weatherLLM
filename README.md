@@ -71,6 +71,23 @@ python eval/run_eval.py hybrid         # RAG 檢索品質 eval，免費，需先
 python eval/run_intent_eval.py         # 意圖解析準確率 eval，會打 OpenAI API
 ```
 
+## MCP tool server
+
+`code/mcp_server.py` 把景點/住宿/餐廳/行政區座標查詢包成 MCP tool，讓 Claude Desktop／Claude Code 等 MCP client 能直接查這些資料，不用透過 Streamlit 介面（跟既有 [cwa-mcp-server](https://github.com/gary2376/cwa-mcp-server) 同一套 SDK／寫法）。需要 Python >=3.10（`mcp[cli]` 套件要求，見 ROADMAP.md Phase 2）。
+
+```json
+{
+  "mcpServers": {
+    "weatherllm": {
+      "command": "python3",
+      "args": ["/絕對路徑/weatherLLM/code/mcp_server.py"]
+    }
+  }
+}
+```
+
+提供 `get_attractions`／`get_lodgings`／`get_restaurants`／`get_district_coordinates` 四個 tool，跟一個 `weatherllm://cities`（全台22縣市清單）resource。
+
 ## 授權
 
 程式碼採 MIT License（見 [LICENSE](LICENSE)）；各資料源（觀光資料標準 V2.1／TDX 使用條款／政府資料開放授權條款）另有各自的引用/標示要求，尚未整理成獨立文件（見 ROADMAP.md Phase 0 待辦）。
