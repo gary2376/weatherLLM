@@ -4,7 +4,7 @@
 
 Streamlit 打造的天氣查詢＋景點/住宿推薦系統，資料涵蓋全台 22 縣市（不是只有台中）。
 
-**目前狀態：已部署上線（Streamlit Community Cloud）**。免費方案冷啟動可能需要等待幾秒到一分鐘喚醒；輕量路徑（關鍵字比對、CCTV/景點地圖）不需要任何 API key 就能用，進階自然語言建議需要在側欄貼上自己的 OpenAI API Key（BYOK，不會被儲存）。開發環境設定見下方「本機執行」。
+**目前狀態：已部署上線（Streamlit Community Cloud）**。免費方案冷啟動可能需要等待幾秒到一分鐘喚醒；輕量路徑（關鍵字比對、景點地圖）不需要任何 API key 就能用，進階自然語言建議需要在側欄貼上自己的 OpenAI API Key（BYOK，不會被儲存）。開發環境設定見下方「本機執行」。
 
 ## 系統長什麼樣
 
@@ -12,7 +12,7 @@ Streamlit 打造的天氣查詢＋景點/住宿推薦系統，資料涵蓋全台
 使用者
   │
   ▼
-streamlit_app.py::main()  ── Streamlit UI（地圖／CCTV圖釘／聊天框）
+streamlit_app.py::main()  ── Streamlit UI（地圖／景點圖釘／聊天框）
   │
   ▼
 orchestrator.py（LangGraph）
@@ -34,7 +34,7 @@ orchestrator.py（LangGraph）
 
 - **全台天氣查詢**：即時雷達/降水摘要、指定日期時段預報（資料源：Open-Meteo，免費無需金鑰）
 - **景點/住宿/餐廳推薦**：混合檢索（BM25 + 語意向量 RRF 融合），支援「下雨天室內景點」這類天氣條件過濾
-- **地圖 + CCTV 圖釘顯示**（輕量路徑，不需要任何 API key）
+- **地圖景點圖釘顯示**（輕量路徑，不需要任何 API key）
 - **進階自然語言建議**（需使用者自行在側欄貼上 OpenAI API key，Bring-Your-Own-Key，app 擁有者不需負擔費用）
 - **可觀測性**：Langfuse 追蹤（選配，未設定金鑰時優雅降級為無 tracing 版本）
 

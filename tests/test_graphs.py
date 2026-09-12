@@ -232,13 +232,12 @@ class _FakeChatbot:
     general_weather_query_keywords = ["天氣", "氣象"]
     weather_phenomenon_keywords = {"下雨": "降雨"}
 
-    def __init__(self, resp_text="Streamlit回應", cctv_names=None, query_type="attraction"):
+    def __init__(self, resp_text="Streamlit回應", query_type="attraction"):
         self.resp_text = resp_text
-        self.cctv_names = cctv_names or []
         self.query_type = query_type
 
     def process_message(self, user_input, override_district=None):
-        return (self.resp_text, self.cctv_names, None, self.query_type)
+        return (self.resp_text, None, self.query_type)
 
 
 def test_supervisor_routes_to_advanced_on_weather_keyword():
@@ -273,15 +272,3 @@ def test_orchestrator_falls_back_to_lightweight_when_no_api_key():
     )
     assert "建議關注的旅遊景點" in result["final_display_text"]
     assert "不該被用到" not in result["final_display_text"]
-
-
-def test_orchestrator_appends_cctv_legend_when_present():
-    chatbot = _FakeChatbot(resp_text="回應", cctv_names=["某CCTV"], query_type=None)
-    result = orchestrator.run_orchestrator(
-        user_input="推薦景點",
-        chatbot=chatbot,
-        system_weather_fn=lambda prompt, override: "",
-        api_key_available=False,
-    )
-    assert "建議關注的監視器位置" in result["final_display_text"]
-    assert "某CCTV" in result["final_display_text"]

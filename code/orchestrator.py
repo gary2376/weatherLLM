@@ -10,7 +10,7 @@ pytest 測路由跟組合邏輯，不用開瀏覽器。
 
 兩個 worker：
 - lightweight_node：對應原本「Streamlit 內部機器人處理」那段，包成 `WeatherChatbot`
-  worker（地圖/CCTV圖釘資料仍由 `WeatherChatbot.process_message()` 產生，這個圖
+  worker（地圖景點圖釘資料仍由 `WeatherChatbot.process_message()` 產生，這個圖
   不重寫那段邏輯）。
 - advanced_node：對應原本「呼叫 system.py」那段，包成 OpenAI 進階建議 worker
   （實際天氣/RAG/LLM 邏輯仍在 `system.py` 的 `get_weather_data()`，這個圖只決定
@@ -26,11 +26,9 @@ class OrchestratorState(TypedDict, total=False):
     chatbot: object  # WeatherChatbot instance
     override_district: Optional[str]
     api_key_available: bool
-    show_all_cctvs: bool
     system_weather_fn: Callable[[str, Optional[str]], str]
 
     sl_resp_text: str
-    sl_cctv_names: List[str]
     sl_attr_df: object
     sl_query_type: Optional[str]
 
@@ -103,12 +101,11 @@ def _sanitize_system_response(content) -> str:
 
 def lightweight_node(state: OrchestratorState) -> OrchestratorState:
     chatbot = state["chatbot"]
-    sl_resp_text, sl_cctv_names, sl_attr_df, sl_query_type = chatbot.process_message(
+    sl_resp_text, sl_attr_df, sl_query_type = chatbot.process_message(
         state["user_input"], state.get("override_district")
     )
     return {
         "sl_resp_text": sl_resp_text,
-        "sl_cctv_names": sl_cctv_names or [],
         "sl_attr_df": sl_attr_df,
         "sl_query_type": sl_query_type,
     }
@@ -143,7 +140,6 @@ def advanced_node(state: OrchestratorState) -> OrchestratorState:
 def combine_node(state: OrchestratorState) -> OrchestratorState:
     system_py_main_response = state.get("system_py_main_response", "")
     sl_query_type = state.get("sl_query_type")
-    sl_cctv_names = state.get("sl_cctv_names") or []
 
     final_response_elements: List[str] = []
 
@@ -163,16 +159,6 @@ def combine_node(state: OrchestratorState) -> OrchestratorState:
 
     if not final_response_elements:
         final_response_elements.append("抱歉，目前無法處理您的請求，請再試一次或調整您的問題。")
-
-    if sl_cctv_names:
-        cctv_legend_text = "\n\n**🎯 建議關注的監視器位置：** (地圖上紅色圖釘標記)"
-        if state.get("show_all_cctvs"):
-            cctv_legend_text += " 其他監視器以藍色相機標記。"
-        final_response_elements.append(cctv_legend_text)
-        cctv_list_for_display = [f"{i}. {name}" for i, name in enumerate(sl_cctv_names[:5], 1)]
-        if len(sl_cctv_names) > 5:
-            cctv_list_for_display.append(f"...以及其他 {len(sl_cctv_names) - 5} 個位置")
-        final_response_elements.append("\n".join(cctv_list_for_display))
 
     final_display_text = "\n".join(filter(None, final_response_elements)).strip()
     if not final_display_text:
@@ -217,7 +203,6 @@ def run_orchestrator(
     system_weather_fn: Callable[[str, Optional[str]], str],
     override_district: Optional[str] = None,
     api_key_available: bool = False,
-    show_all_cctvs: bool = False,
 ) -> dict:
     graph = get_orchestrator_graph()
     initial_state: OrchestratorState = {
@@ -225,7 +210,6 @@ def run_orchestrator(
         "chatbot": chatbot,
         "override_district": override_district,
         "api_key_available": api_key_available,
-        "show_all_cctvs": show_all_cctvs,
         "system_weather_fn": system_weather_fn,
     }
     return graph.invoke(initial_state, config={"recursion_limit": MAX_ORCHESTRATOR_STEPS})

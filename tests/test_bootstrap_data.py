@@ -68,28 +68,26 @@ def test_data_exists_false_when_directory_missing(tmp_path, monkeypatch):
 def test_data_exists_false_when_other_files_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(bootstrap_data, "DATA_DIR", tmp_path)
     _make_real_sqlite_db(tmp_path / "travel.db")
-    # 缺 bm25_index.pkl / cctv_enhanced.csv / chroma/，不算完整
+    # 缺 bm25_index.pkl / chroma/，不算完整
     assert bootstrap_data.data_exists() is False
 
 
 def test_data_exists_true_when_all_required_paths_present_and_valid(tmp_path, monkeypatch):
     monkeypatch.setattr(bootstrap_data, "DATA_DIR", tmp_path)
     _make_real_sqlite_db(tmp_path / "travel.db")
-    for name in ["bm25_index.pkl", "cctv_enhanced.csv"]:
-        (tmp_path / name).write_text("x")
+    (tmp_path / "bm25_index.pkl").write_text("x")
     (tmp_path / "chroma").mkdir()
     assert bootstrap_data.data_exists() is True
 
 
 def _fake_tar_bytes(valid_db: bool = True) -> bytes:
     """建一個最小的假tarball，內容跟真實資料包同樣結構，travel.db是真的SQLite
-    檔案（`ensure_data_present()`會真的驗證內容），其餘三項是佔位檔案。"""
+    檔案（`ensure_data_present()`會真的驗證內容），其餘是佔位檔案。"""
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         db_path = tmp_path / "travel.db"
         _make_real_sqlite_db(db_path, with_attractions_table=valid_db)
         (tmp_path / "bm25_index.pkl").write_text("fake-bm25")
-        (tmp_path / "cctv_enhanced.csv").write_text("fake-cctv")
         (tmp_path / "chroma").mkdir()
         (tmp_path / "chroma" / "chroma.sqlite3").write_text("fake-chroma")
 
@@ -103,8 +101,7 @@ def _fake_tar_bytes(valid_db: bool = True) -> bytes:
 def test_ensure_data_present_skips_download_when_data_already_exists(tmp_path, monkeypatch):
     monkeypatch.setattr(bootstrap_data, "DATA_DIR", tmp_path)
     _make_real_sqlite_db(tmp_path / "travel.db")
-    for name in ["bm25_index.pkl", "cctv_enhanced.csv"]:
-        (tmp_path / name).write_text("existing")
+    (tmp_path / "bm25_index.pkl").write_text("existing")
     (tmp_path / "chroma").mkdir()
 
     called = {"get": False}

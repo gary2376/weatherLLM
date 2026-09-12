@@ -5,8 +5,6 @@ from streamlit_folium import st_folium
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 from datetime import datetime
-import numpy as np
-import pygeohash as pgh
 import os
 import importlib
 import json
@@ -98,8 +96,6 @@ def _rate_limit_check(timestamps: List[float], now: float) -> Tuple[bool, List[f
     return True, recent
 
 
-# 請確認您已安裝 pygeohash: pip install pygeohash
-
 def load_css():
     """載入自訂 CSS 樣式"""
     css_file = Path(__file__).parent / "style.css"
@@ -116,72 +112,22 @@ def load_css():
         </style>
         """, unsafe_allow_html=True)
 
-class CCTVManager:
-    def __init__(self, csv_path: str):
-        self.csv_path = csv_path
-        self.cctv_data: pd.DataFrame = self._load_cctv_data()
+TAICHUNG_CENTER = (24.1477, 120.6736)
 
-    def _load_cctv_data(self) -> pd.DataFrame:
-        default_cols = ['name', 'lat', 'long', 'link', 'geohash']
-        try:
-            data = pd.read_csv(self.csv_path)
-            data = data.dropna(subset=['name', 'lat', 'long', 'link'])
-            geohash_precision_storage = 7 
-            data['geohash'] = data.apply(
-                lambda row: pgh.encode(float(row['lat']), float(row['long']), precision=geohash_precision_storage)
-                if pd.notnull(row['lat']) and pd.notnull(row['long']) else None,
-                axis=1
-            )
-            data = data.dropna(subset=['geohash'])
-            return data
-        except Exception as e:
-            st.error(f"載入 CCTV 資料時發生錯誤: {e}")
-            return pd.DataFrame(columns=default_cols)
 
-    def get_taichung_center(self) -> Tuple[float, float]:
-        return 24.1477, 120.6736
-
-    def create_map(self,
-                   cctv_data_to_plot: Optional[pd.DataFrame] = None,
-                   highlighted_cctv_names: Optional[List[str]] = None,
-                   attractions_df: Optional[pd.DataFrame] = None) -> folium.Map:
-        center_lat, center_long = self.get_taichung_center()
-        m = folium.Map(location=[center_lat, center_long], zoom_start=11, tiles='OpenStreetMap')
-        if cctv_data_to_plot is not None and not cctv_data_to_plot.empty:
-            for idx, row in cctv_data_to_plot.iterrows():
-                is_highlighted = highlighted_cctv_names and row['name'] in highlighted_cctv_names
-                color = 'red' if is_highlighted else 'blue'
-                icon_name = 'video-camera' if is_highlighted else 'camera'
-                popup_content_cctv = f"""<div style="width: 300px;"><h4>{row['name']} (CCTV)</h4><p><b>座標:</b> {row['lat']:.6f}, {row['long']:.6f}</p><p><b>即時影像:</b></p><img src="{row['link']}" width="280" style="border: 1px solid #ccc;" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iI2Y0ZjRmNCIvPjx0ZXh0IHg9IjE0MCIgeT0iNzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuW9seePoueEoeazlTwvdGV4dD48L3N2Zz4=';" /><br><br><a href="{row['link']}" target="_blank" style="color: #0066cc;">開啟完整影像</a></div>"""
-                folium.Marker(location=[row['lat'], row['long']], popup=folium.Popup(popup_content_cctv, max_width=320), tooltip=row['name'],
-                              icon=folium.Icon(color=color, icon=icon_name, prefix='fa', icon_color='white')).add_to(m)
-        if attractions_df is not None and not attractions_df.empty:
-            for idx, row in attractions_df.iterrows():
-                try: lat, lng = float(row['latitude']), float(row['longitude'])
-                except (ValueError, TypeError): continue
-                place_label = row.get('category') or row.get('price_range') or '景點'
-                popup_content_attraction = f"""<div style="width: 250px;"><h4>{row['name']} ({place_label})</h4><p><b>地區:</b> {row.get('city', '')}{row.get('district', 'N/A')}</p><p><b>座標:</b> {lat:.6f}, {lng:.6f}</p></div>"""
-                folium.Marker(location=[lat, lng], popup=folium.Popup(popup_content_attraction, max_width=270),
-                              tooltip=f"{row['name']} ({place_label})",
-                              icon=folium.Icon(color='green', icon='map-marker', prefix='fa')).add_to(m)
-        return m
-
-    def get_nearby_cctvs(self, lat: float, lng: float, radius_km: float = 1.0) -> List[Dict]:
-        def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-            R, rlat1, rlon1, rlat2, rlon2 = 6371, np.radians(lat1), np.radians(lon1), np.radians(lat2), np.radians(lon2) # Renamed for clarity
-            dlat, dlon = rlat2 - rlat1, rlon2 - rlon1
-            a = np.sin(dlat/2)**2 + np.cos(rlat1) * np.cos(rlat2) * np.sin(dlon/2)**2
-            return R * 2 * np.arcsin(np.sqrt(a))
-        nearby_cctvs = []
-        if self.cctv_data.empty: return nearby_cctvs
-        for idx, row in self.cctv_data.iterrows():
-            try:
-                cctv_lat, cctv_long = float(row['lat']), float(row['long'])
-                distance = haversine_distance(lat, lng, cctv_lat, cctv_long)
-                if distance <= radius_km:
-                    nearby_cctvs.append({'name': row['name'], 'distance': distance, 'lat': cctv_lat, 'long': cctv_long, 'link': row['link']})
+def create_attraction_map(attractions_df: Optional[pd.DataFrame] = None) -> folium.Map:
+    m = folium.Map(location=list(TAICHUNG_CENTER), zoom_start=11, tiles='OpenStreetMap')
+    if attractions_df is not None and not attractions_df.empty:
+        for idx, row in attractions_df.iterrows():
+            try: lat, lng = float(row['latitude']), float(row['longitude'])
             except (ValueError, TypeError): continue
-        return sorted(nearby_cctvs, key=lambda x: x['distance'])
+            category, price_range = row.get('category'), row.get('price_range')
+            place_label = category if pd.notna(category) else (price_range if pd.notna(price_range) else '景點')
+            popup_content_attraction = f"""<div style="width: 250px;"><h4>{row['name']} ({place_label})</h4><p><b>地區:</b> {row.get('city', '')}{row.get('district', 'N/A')}</p><p><b>座標:</b> {lat:.6f}, {lng:.6f}</p></div>"""
+            folium.Marker(location=[lat, lng], popup=folium.Popup(popup_content_attraction, max_width=270),
+                          tooltip=f"{row['name']} ({place_label})",
+                          icon=folium.Icon(color='green', icon='map-marker', prefix='fa')).add_to(m)
+    return m
 
 class AttractionManager:
     """景點/住宿/餐廳改讀 Data/travel.db（見 repository.py），不再預先整包載入記憶體，
@@ -200,10 +146,7 @@ class AttractionManager:
             data = repository.query_attractions(city=city, district=district, top_n=num_attractions)
         if data.empty:
             return data
-        data['geohash'] = data.apply(
-            lambda row: pgh.encode(row['latitude'], row['longitude'], precision=7)
-            if pd.notnull(row['latitude']) and pd.notnull(row['longitude']) else None, axis=1)
-        return data.dropna(subset=['geohash'])
+        return data.dropna(subset=['latitude', 'longitude'])
 
 def _short_district_form(name: str) -> str:
     return name.replace("區", "").replace("市", "").replace("鄉", "").replace("鎮", "")
@@ -263,8 +206,7 @@ def _build_city_maps() -> Tuple[Dict[str, List[str]], Dict[str, str], Dict[str, 
 
 
 class WeatherChatbot:
-    def __init__(self, cctv_manager: CCTVManager, attraction_manager: AttractionManager):
-        self.cctv_manager = cctv_manager
+    def __init__(self, attraction_manager: AttractionManager):
         self.attraction_manager = attraction_manager
         self.weather_phenomenon_keywords = {'下雨': '降雨', '雨': '降雨', '晴': '晴朗', '陰': '陰天', '風': '強風', '霧': '霧氣', '能見度': '能見度'}
         self.general_weather_query_keywords = ['天氣', '氣象']
@@ -273,17 +215,16 @@ class WeatherChatbot:
         self.hotel_query_keywords = ['住宿', '飯店', '旅館', '民宿', '住哪']
         self.city_districts_map, self.CITY_NAME_MAP, self.DISTRICT_CITY_OVERRIDE, self.CITY_SUFFIX_VARIANTS = _build_city_maps()
 
-    def process_message(self, user_message: str, override_district: Optional[str] = None) -> Tuple[str, List[str], Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
+    def process_message(self, user_message: str, override_district: Optional[str] = None) -> Tuple[str, Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
         """
         處理使用者訊息。
         - override_district: 若側欄有選取行政區，會傳入此參數以覆寫訊息中自動偵測的區域
-        返回: (文字回應, 建議CCTV列表, 建議景點DataFrame, 偵測到的查詢類型)
+        返回: (文字回應, 建議景點DataFrame, 偵測到的查詢類型)
         """
         return self._generate_response(user_message, override_district)
 
-    def _generate_response(self, message: str, override_district: Optional[str] = None) -> Tuple[str, List[str], Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
+    def _generate_response(self, message: str, override_district: Optional[str] = None) -> Tuple[str, Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
         message_lower = message.lower()
-        recommended_cctvs: List[str] = []
         recommended_attractions_df: Optional[pd.DataFrame] = None
         city_districts_map = self.city_districts_map
         query_type, target_region, target_district = None, None, None
@@ -326,11 +267,19 @@ class WeatherChatbot:
         if not target_region and not target_district and any(k in message for k in ["全台", "台灣", "臺灣"]): target_region = "全台"
 
         is_general_weather_q = any(gkw in message for gkw in self.general_weather_query_keywords)
-        if any(kw in message for kw in self.attraction_query_keywords): query_type = "attraction"
-        elif any(kw in message for kw in self.restaurant_query_keywords): query_type = "restaurant"
-        elif any(kw in message for kw in self.hotel_query_keywords): query_type = "hotel"
+        # 使用者常常一次問兩種（「南投的景點以及附近的住宿」）——原本一次只認一種
+        # 類型（景點優先），問兩種只會回第一種，看起來像沒聽懂另一半的問題。這裡
+        # 收集訊息裡有出現的全部類型，下面一次查完全部、合併進同一則回覆。
+        matched_types = [
+            t for t, kws in (
+                ("attraction", self.attraction_query_keywords),
+                ("restaurant", self.restaurant_query_keywords),
+                ("hotel", self.hotel_query_keywords),
+            ) if any(kw in message for kw in kws)
+        ]
+        if matched_types: query_type = matched_types[0]
         elif is_general_weather_q: query_type = "weather"
-        
+
         weather_type = None
         if query_type == "weather" or not query_type:
             for phenom_kw, weather_phenom_val in self.weather_phenomenon_keywords.items():
@@ -342,12 +291,12 @@ class WeatherChatbot:
         # 優先使用外部覆寫的行政區（例如側欄選擇），然後才使用 LLM 偵測出來的 district/region
         search_area = override_district if override_district else (target_district if target_district else target_region)
 
-        if query_type_detected in ["attraction", "restaurant", "hotel"]: # Use detected query type
+        if matched_types:
             place_map = {"attraction": "景點", "restaurant": "餐廳", "hotel": "住宿地點"}
-            search_type = query_type_detected
             if not search_area:
                 search_area = "台中"
-                response_parts = [f"您似乎沒有指定地區，我將為您搜尋'{search_area}'的{place_map[search_type]}。"]
+                wanted = "、".join(place_map[t] for t in matched_types)
+                response_parts = [f"您似乎沒有指定地區，我將為您搜尋'{search_area}'的{wanted}。"]
             explicit_variant = next(
                 (full for suffix, full in self.CITY_SUFFIX_VARIANTS.get(target_region, {}).items()
                  if (target_region + suffix) in message),
@@ -358,103 +307,41 @@ class WeatherChatbot:
                 or self.DISTRICT_CITY_OVERRIDE.get(target_district)
                 or self.CITY_NAME_MAP.get(target_region, "臺中市")
             )
-            recommended_attractions_df = self.attraction_manager.get_attractions(
-                city=resolved_city, district=(target_district or None), attraction_type=search_type)
-            if recommended_attractions_df is not None and not recommended_attractions_df.empty:
-                legend_text = " (地圖上以 <font color='green'>綠色圖釘</font> 標記)"
-                if search_type == "attraction": response_parts.append(f"建議關注的旅遊景點：{legend_text}")
-                else: response_parts.append(f"\n為您找到以下位於'{search_area}'的推薦{place_map[search_type]}:{legend_text}")
-                for i, (_, row) in enumerate(recommended_attractions_df.iterrows(), 1):
-                    detail = row.get('category') or row.get('price_range') or 'N/A'
-                    response_parts.append(f"{i}. **{row['name']}** ({detail}, 行政區: {row.get('city','')}{row.get('district','N/A')})")
-                cctvs_near_attractions_names = []
-                geohash_search_precision = 6 
-                all_cctvs_df = self.cctv_manager.cctv_data
-                if 'geohash' in all_cctvs_df.columns and not all_cctvs_df.empty and 'geohash' in recommended_attractions_df.columns and not recommended_attractions_df.empty:
-                    target_geohashes_for_search = set()
-                    for _, attr_row in recommended_attractions_df.iterrows():
-                        attr_geohash_full = attr_row.get('geohash')
-                        if attr_geohash_full and isinstance(attr_geohash_full, str) and len(attr_geohash_full) >= geohash_search_precision:
-                            attr_geohash_prefix = attr_geohash_full[:geohash_search_precision]
-                            target_geohashes_for_search.add(attr_geohash_prefix)
-                            try: target_geohashes_for_search.update(pgh.neighbors(attr_geohash_prefix))
-                            except Exception: pass 
-                    unique_cctv_names_found = set()
-                    for _, cctv_row in all_cctvs_df.iterrows():
-                        cctv_geohash_full = cctv_row.get('geohash')
-                        if cctv_geohash_full and isinstance(cctv_geohash_full, str) and len(cctv_geohash_full) >= geohash_search_precision:
-                            cctv_geohash_prefix = cctv_geohash_full[:geohash_search_precision]
-                            if cctv_geohash_prefix in target_geohashes_for_search: unique_cctv_names_found.add(cctv_row['name'])
-                    cctvs_near_attractions_names = list(unique_cctv_names_found)
-                if cctvs_near_attractions_names:
-                    recommended_cctvs = cctvs_near_attractions_names[:5] 
-                    if recommended_cctvs: response_parts.append(f"\n在您關注的景點附近找到以下監視器，方便您確認即時路況：")
-                elif target_region == "台中": 
-                    taichung_cctvs = self._get_region_cctvs(target_region)
-                    if taichung_cctvs:
-                        current_cctv_set = set(recommended_cctvs); [recommended_cctvs.append(c) for c in taichung_cctvs if c not in current_cctv_set]
-                        recommended_cctvs = recommended_cctvs[:5]
-                        if recommended_cctvs: response_parts.append(f"\n同時，您可以參考'{search_area if search_area else target_region}'區域的即時影像。")
-            else: 
-                response_parts.append(f"抱歉，在'{search_area if search_area else (target_region if target_region else '指定區域')}'找不到符合條件的{place_map[search_type]}。")
-                if query_type_detected == "attraction" and (target_region == "台中" or (search_area and "台中" in search_area)):
-                    taichung_cctvs = self._get_region_cctvs("台中")
-                    if taichung_cctvs: recommended_cctvs = taichung_cctvs[:5]
+            result_frames = []
+            for search_type in matched_types:
+                df = self.attraction_manager.get_attractions(
+                    city=resolved_city, district=(target_district or None), attraction_type=search_type)
+                if df is not None and not df.empty:
+                    legend_text = " (地圖上以 <font color='green'>綠色圖釘</font> 標記)"
+                    if search_type == "attraction": response_parts.append(f"建議關注的旅遊景點：{legend_text}")
+                    else: response_parts.append(f"\n為您找到以下位於'{search_area}'的推薦{place_map[search_type]}:{legend_text}")
+                    for i, (_, row) in enumerate(df.iterrows(), 1):
+                        category = row.get('category')
+                        price_range = row.get('price_range')
+                        detail = category if pd.notna(category) else (price_range if pd.notna(price_range) else 'N/A')
+                        response_parts.append(f"{i}. **{row['name']}** ({detail}, 行政區: {row.get('city','')}{row.get('district','N/A')})")
+                    result_frames.append(df)
+                else:
+                    response_parts.append(f"抱歉，在'{search_area if search_area else (target_region if target_region else '指定區域')}'找不到符合條件的{place_map[search_type]}。")
+            if result_frames:
+                recommended_attractions_df = pd.concat(result_frames, ignore_index=True, sort=False)
         elif query_type_detected == "weather":
-            c_cctv_list_for_weather = []
             if target_region and weather_type:
                 response_parts.append(f"'{target_region}'地區 '{weather_type}' 天氣觀察。") # Streamlit bot's own weather text
-                c_cctv_list_for_weather = self._get_region_cctvs(target_region)
             elif target_region:
                 response_parts.append(f"'{target_region}'地區天氣觀察。") # Streamlit bot's own weather text
-                c_cctv_list_for_weather = self._get_region_cctvs(target_region)
             elif weather_type:
                 response_parts.append(f"全台'{weather_type}'觀察。") # Streamlit bot's own weather text
-                c_cctv_list_for_weather = self._get_weather_related_cctvs(weather_type)
             else: response_parts.append("（關於天氣，請參考OpenAI的詳細建議）") # Placeholder if only general "weather"
-            if c_cctv_list_for_weather:
-                current_cctv_set = set(recommended_cctvs); [recommended_cctvs.append(c) for c in c_cctv_list_for_weather if c not in current_cctv_set]
         else: # Fallback for query_type_detected is None
             response_parts.append("我能為您查詢天氣、景點、餐廳或住宿。請試著問我更具體的問題。")
-            default_cctvs = self._get_region_cctvs("台中")
-            if default_cctvs: current_cctv_set = set(recommended_cctvs); [recommended_cctvs.append(c) for c in default_cctvs if c not in current_cctv_set]
-        
-        if recommended_cctvs: recommended_cctvs = list(set(recommended_cctvs))[:5] 
-        return "\n".join(response_parts), recommended_cctvs, recommended_attractions_df, query_type_detected # Return detected type
 
-    def _get_region_cctvs(self, region: str) -> List[str]:
-        if self.cctv_manager.cctv_data.empty: return []
-        norm_reg, alt_reg = region.replace("台", "臺"), region.replace("臺", "台")
-        rel_cctvs = [row['name'] for _, row in self.cctv_manager.cctv_data.iterrows() if any(r in str(row['name']) for r in [norm_reg, alt_reg, region])]
-        if not rel_cctvs and len(self.cctv_manager.cctv_data) > 0: return self.cctv_manager.cctv_data['name'].sample(min(5, len(self.cctv_manager.cctv_data))).tolist()
-        return list(set(rel_cctvs))[:10]
-
-    def _get_weather_related_cctvs(self, weather_type: str) -> List[str]:
-        if self.cctv_manager.cctv_data.empty: return []
-        rel_cctvs = []
-        if weather_type in ['降雨', '霧氣', '強風']:
-            kw_chk = ['國道', '省道', '橋', '交流道', '快速道路', '港', '機場', '車站', '高鐵']
-            rel_cctvs = [row['name'] for _, row in self.cctv_manager.cctv_data.iterrows() if any(kw in str(row['name']) for kw in kw_chk)]
-            if not rel_cctvs and len(self.cctv_manager.cctv_data) > 0: return self.cctv_manager.cctv_data['name'].sample(min(8, len(self.cctv_manager.cctv_data))).tolist()
-        elif len(self.cctv_manager.cctv_data) > 0: return self.cctv_manager.cctv_data['name'].sample(min(8, len(self.cctv_manager.cctv_data))).tolist()
-        return list(set(rel_cctvs))[:8]
+        return "\n".join(response_parts), recommended_attractions_df, query_type_detected # Return detected type
 
 def initialize_session_state():
-    # 計算 Data 目錄：使用 repo 相對路徑 Data/
-    try:
-        project_root = Path(__file__).resolve().parents[1]
-    except Exception:
-        project_root = Path.cwd()
-    data_dir = project_root / 'Data'
-
-    cctv_path = str(data_dir / 'cctv_enhanced.csv')
-
-    if 'cctv_manager' not in st.session_state:
-        st.session_state.cctv_manager = CCTVManager(str(cctv_path))
     if 'attraction_manager' not in st.session_state:
         st.session_state.attraction_manager = AttractionManager()
-    if 'chatbot' not in st.session_state: st.session_state.chatbot = WeatherChatbot(st.session_state.cctv_manager, st.session_state.attraction_manager)
-    if 'highlighted_cctvs' not in st.session_state: st.session_state.highlighted_cctvs = []
+    if 'chatbot' not in st.session_state: st.session_state.chatbot = WeatherChatbot(st.session_state.attraction_manager)
     if 'recommended_attractions_on_map' not in st.session_state: st.session_state.recommended_attractions_on_map = None
     if 'chat_messages' not in st.session_state:
         st.session_state.chat_messages = [{"role": "assistant", "content": "您好！我是您的天氣與景點助手。請問您想了解哪個地區的天氣、景點、餐廳或住宿資訊？"}]
@@ -475,7 +362,6 @@ def initialize_session_state():
         except Exception:
             # 若清理失敗，保留原本內容但不 crash
             pass
-    if 'show_all_cctvs_checkbox_value' not in st.session_state: st.session_state.show_all_cctvs_checkbox_value = False
 
 
 def main():
@@ -489,7 +375,7 @@ def main():
     # 第一次啟動時`Data/`是空的，這裡從GitHub Release下載資料包補齊——`Data/`
     # 已經存在的話（本機開發、或部署後的第二次以後啟動）`ensure_data_present()`
     # 內部會直接跳過，不重複下載。放在`initialize_session_state()`之前執行，
-    # 因為那邊會建立`CCTVManager`讀`Data/cctv_enhanced.csv`。
+    # 因為那邊會建立`AttractionManager`讀`Data/travel.db`。
     _data_already_exists = bootstrap_data.data_exists()
     print(f"[bootstrap_data] main(): data_exists()={_data_already_exists}", flush=True)
     if not _data_already_exists:
@@ -615,10 +501,8 @@ def main():
                     system_weather_fn=_call_system_weather,
                     override_district=sel_dist,
                     api_key_available=api_key_available,
-                    show_all_cctvs=st.session_state.get('show_all_cctvs_checkbox_value', False),
                 )
 
-            st.session_state.highlighted_cctvs = result.get("sl_cctv_names") or []
             st.session_state.recommended_attractions_on_map = result.get("sl_attr_df")
 
             final_display_text = result.get("final_display_text") or \
@@ -627,37 +511,15 @@ def main():
             st.session_state.chat_messages.append({"role": "assistant", "content": final_display_text})
             st.rerun()
 
-    with col1: # 地圖顯示部分 (與前一版本相同)
+    with col1:
         st.header("🗺️ 地圖")
         with st.expander("地圖控制選項", expanded=True):
-            st.session_state.show_all_cctvs_checkbox_value = st.checkbox(
-                "在地圖上顯示所有CCTV", value=st.session_state.show_all_cctvs_checkbox_value, key="show_all_cctvs_widget")
-            if st.button("清除地圖重點標記與推薦景點"):
-                st.session_state.highlighted_cctvs, st.session_state.recommended_attractions_on_map = [], None; st.rerun()
-        
-        cctv_df_map: pd.DataFrame
-        if st.session_state.show_all_cctvs_checkbox_value: 
-            cctv_df_map = st.session_state.cctv_manager.cctv_data
-        else:
-            if st.session_state.highlighted_cctvs and not st.session_state.cctv_manager.cctv_data.empty :
-                cctv_df_map = st.session_state.cctv_manager.cctv_data[st.session_state.cctv_manager.cctv_data['name'].isin(st.session_state.highlighted_cctvs)]
-            else: 
-                cctv_df_map = pd.DataFrame(columns=(st.session_state.cctv_manager.cctv_data.columns if not st.session_state.cctv_manager.cctv_data.empty else ['name', 'lat', 'long', 'link', 'geohash']))
-        
+            if st.button("清除推薦景點"):
+                st.session_state.recommended_attractions_on_map = None; st.rerun()
+
         attr_map = st.session_state.recommended_attractions_on_map
-        current_map_obj = st.session_state.cctv_manager.create_map(
-            cctv_data_to_plot=cctv_df_map, highlighted_cctv_names=st.session_state.highlighted_cctvs, attractions_df=attr_map)
-        
-        map_display_data = st_folium(current_map_obj, width="100%", height=550, returned_objects=["last_clicked"])
-        if map_display_data and map_display_data["last_clicked"]:
-            clk_lat, clk_lng = map_display_data["last_clicked"]["lat"], map_display_data["last_clicked"]["lng"]
-            near_cctvs = st.session_state.cctv_manager.get_nearby_cctvs(clk_lat, clk_lng, radius_km=0.5)
-            if near_cctvs:
-                closest = near_cctvs[0]
-                st.info(f"📍 您點擊位置附近 ({closest['distance']:.2f} km) 的監視器: **{closest['name']}**")
-                try: st.image(closest['link'], caption=f"即時影像 - {closest['name']}", width=350)
-                except Exception: st.warning("無法載入即時影像，請檢查網路連線或監視器狀態。")
-            else: st.info("您點擊的位置附近 0.5km 內沒有找到CCTV。")
+        current_map_obj = create_attraction_map(attractions_df=attr_map)
+        st_folium(current_map_obj, width="100%", height=550, returned_objects=["last_clicked"])
 
 
 if __name__ == "__main__":

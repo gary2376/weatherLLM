@@ -295,7 +295,6 @@ def test_weather_chatbot_resolves_zhubei_to_hsinchu_county_not_city():
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message("竹北有什麼景點")
@@ -313,7 +312,6 @@ def test_weather_chatbot_bare_hsinchu_still_resolves_to_hsinchu_city():
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message("新竹有什麼景點")
@@ -338,7 +336,6 @@ def test_weather_chatbot_explicit_city_wins_over_same_name_district_in_other_cit
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message(query)
@@ -357,7 +354,6 @@ def test_weather_chatbot_ambiguous_district_without_city_still_defaults_to_taich
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message("北區有什麼景點")
@@ -387,7 +383,6 @@ def test_weather_chatbot_covers_all_22_counties_not_just_original_5(query, expec
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message(query)
@@ -413,7 +408,6 @@ def test_weather_chatbot_explicit_county_suffix_disambiguates_city_vs_county(que
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message(query)
@@ -433,8 +427,39 @@ def test_weather_chatbot_nonexistent_taichung_county_does_not_redirect_to_bogus_
             return pd.DataFrame()
 
     chatbot = streamlit_app.WeatherChatbot(
-        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message("台中縣的景點")
     assert captured["city"] == "臺中市"
+
+
+def test_weather_chatbot_combines_attraction_and_hotel_when_both_asked():
+    """使用者實測回報：「南投的景點以及附近的住宿地點」只回景點、沒回住宿——原本
+    一次訊息只認一種類型（景點優先於住宿/餐廳），問兩種只回第一種比對到的類型。
+    這裡驗證訊息同時符合兩種關鍵字時，兩種都查、都出現在回覆裡，且合併進同一個
+    DataFrame（供地圖繪製）。"""
+    calls = []
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            calls.append(attraction_type)
+            if attraction_type == "attraction":
+                return pd.DataFrame([{
+                    "name": "某景點", "city": city, "district": "某區",
+                    "latitude": 24.0, "longitude": 121.0, "category": "文化類",
+                }])
+            return pd.DataFrame([{
+                "name": "某民宿", "city": city, "district": "某區",
+                "latitude": 24.1, "longitude": 121.1, "price_range": "2000~3000",
+            }])
+
+    chatbot = streamlit_app.WeatherChatbot(attraction_manager=_SpyAttractionManager())
+    resp, df, qtype = chatbot.process_message("南投的景點以及附近的住宿地點")
+
+    assert calls == ["attraction", "hotel"]
+    assert "建議關注的旅遊景點：" in resp
+    assert "推薦住宿地點" in resp
+    assert len(df) == 2
+    # 地圖用的place_label計算不該因為不同類型欄位混在一起（景點有category、
+    # 住宿有price_range，彼此都沒有對方那欄）而把NaN當成truthy值誤判成標籤
+    streamlit_app.create_attraction_map(df)  # 不該丟例外

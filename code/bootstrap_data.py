@@ -20,13 +20,17 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "Data"
 # 見 collector/build_embeddings.py / derive_district_coords.py 的產出物：
 # travel.db（SQLite，含attractions/lodgings/restaurants/transit_stations/
 # district_coords）、chroma/（語意檢索向量索引）、bm25_index.pkl（BM25 lexical
-# 索引）、cctv_enhanced.csv（CCTV圖釘資料）。這個URL對應repo release頁面的
-# `data-v1` tag，重新產生資料庫後要記得建新的release、更新這個URL。
+# 索引）。這個URL對應repo release頁面的`data-v1` tag，重新產生資料庫後要記得
+# 建新的release、更新這個URL。
+#
+# 這個release資產裡還打包了cctv_enhanced.csv（CCTV功能拿掉後不再需要，見
+# streamlit_app.py），沒有重新打包release去移除它——多餘的90KB左右靜態檔案，
+# 不影響功能，之後真的要重建release（例如資料庫更新）時再一併清掉即可。
 DATA_RELEASE_URL = (
     "https://github.com/gary2376/weatherLLM/releases/download/data-v1/weatherllm-data-v1.tar.gz"
 )
 
-REQUIRED_PATHS = ["travel.db", "bm25_index.pkl", "cctv_enhanced.csv", "chroma"]
+REQUIRED_PATHS = ["travel.db", "bm25_index.pkl", "chroma"]
 
 # 真正的travel.db有38MB+，小於這個門檻代表下載/解壓縮不完整或是空的
 MIN_TRAVEL_DB_BYTES = 1_000_000
