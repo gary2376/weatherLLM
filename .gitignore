@@ -6,7 +6,12 @@ __pycache__/
 # Virtual environment
 .venv/
 venv/
-.env/
+
+# Secrets（原本寫成 .env/ 只擋得到叫 .env 的資料夾，真正的 .env 檔案沒被擋到，
+# 導致這個檔案曾經被誤commit進git history——見 ROADMAP.md Phase 0 gitleaks掃描記錄）
+.env
+.env.*
+!.env.example
 
 # IDEs
 .vscode/

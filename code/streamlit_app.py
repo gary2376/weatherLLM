@@ -15,6 +15,31 @@ import time
 import repository
 import orchestrator
 
+SECRETS_BRIDGE_KEYS = ("OPENAI_API_KEY", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
+
+
+def _bridge_secrets_to_env(secrets_source, environ: dict) -> None:
+    """系統邊界（見 ROADMAP.md Phase 0）：Streamlit Community Cloud 部署時金鑰要放
+    在後台的Secrets管理介面，不是`.env`檔案（部署環境本來就沒有這個檔案，也不該把
+    金鑰打包進repo/image）。用`setdefault`橋接：本機開發`.env`已經有值的話維持
+    原樣不覆蓋，部署環境`.env`不存在時才從`secrets_source`（正式呼叫時是`st.secrets`）
+    補進`environ`，下游`system.py`的`os.getenv(...)`呼叫完全不用改，也不用整套換成
+    新的config系統。純函式（`secrets_source`/`environ`都當參數傳入，不直接碰
+    `st.secrets`/`os.environ`），方便直接測試不用真的起Streamlit runtime；呼叫端
+    （下面）負責接住`st.secrets`可能丟出的例外並傳真正的`os.environ`進來。"""
+    for key in SECRETS_BRIDGE_KEYS:
+        environ.setdefault(key, secrets_source.get(key, ""))
+
+
+# 這段要放在`import system`（下面）之前——system.py在import當下就會檢查
+# LANGFUSE_PUBLIC_KEY/SECRET_KEY決定要不要啟用Langfuse tracing。本機開發沒有
+# 設定任何`.streamlit/secrets.toml`是正常情況，`st.secrets`此時可能丟例外
+# （視Streamlit版本而定），接住例外而不是讓整個app掛掉。
+try:
+    _bridge_secrets_to_env(st.secrets, os.environ)
+except Exception:
+    pass
+
 # 全域顯示前的 sanitizer，確保傳給 Streamlit 的一定是可顯示的字串
 def sanitize_for_display(content) -> str:
     try:

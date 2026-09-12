@@ -218,6 +218,29 @@ def test_rate_limit_forgets_requests_outside_the_window():
     assert len(timestamps) == 1
 
 
+def test_bridge_secrets_to_env_fills_missing_keys_from_secrets():
+    """部署環境（例如Streamlit Community Cloud）沒有`.env`檔案時，這三把key
+    要能從`st.secrets`橋接進`os.environ`，下游`system.py`的`os.getenv(...)`
+    才讀得到值。"""
+    fake_secrets = SimpleNamespace(get=lambda k, default="": {
+        "OPENAI_API_KEY": "sk-from-secrets", "LANGFUSE_PUBLIC_KEY": "pub-from-secrets",
+    }.get(k, default))
+    environ = {}
+    streamlit_app._bridge_secrets_to_env(fake_secrets, environ)
+    assert environ["OPENAI_API_KEY"] == "sk-from-secrets"
+    assert environ["LANGFUSE_PUBLIC_KEY"] == "pub-from-secrets"
+    assert environ["LANGFUSE_SECRET_KEY"] == ""  # secrets沒有這把，補空字串不是報錯
+
+
+def test_bridge_secrets_to_env_does_not_override_existing_env_value():
+    """本機開發`.env`已經有值時（透過`load_dotenv()`載入到`os.environ`），
+    `st.secrets`橋接不能蓋掉它——`setdefault`是這個保證的核心，不是巧合。"""
+    fake_secrets = SimpleNamespace(get=lambda k, default="": "sk-from-secrets-should-not-win")
+    environ = {"OPENAI_API_KEY": "sk-from-dotenv"}
+    streamlit_app._bridge_secrets_to_env(fake_secrets, environ)
+    assert environ["OPENAI_API_KEY"] == "sk-from-dotenv"
+
+
 # _is_machine_like() 原本是 generate_answer_from_user_prompt_and_data() 內部的
 # nested function，沒辦法直接測——搬到 module 層級（Phase 3）之後才補得了這組測試。
 def test_is_machine_like_detects_empty_or_json_only():

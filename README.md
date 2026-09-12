@@ -90,4 +90,4 @@ python eval/run_intent_eval.py         # 意圖解析準確率 eval，會打 Ope
 
 ## 授權
 
-程式碼採 MIT License（見 [LICENSE](LICENSE)）；各資料源（觀光資料標準 V2.1／TDX 使用條款／政府資料開放授權條款）另有各自的引用/標示要求，尚未整理成獨立文件（見 ROADMAP.md Phase 0 待辦）。
+程式碼採 MIT License（見 [LICENSE](LICENSE)）；各資料源（觀光資料標準 V2.1／TDX／Open-Meteo）各自的授權條款與顯名聲明要求，見 [DATA_LICENSE.md](DATA_LICENSE.md)。
