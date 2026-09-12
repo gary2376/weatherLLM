@@ -14,6 +14,7 @@ import time
 
 import repository
 import orchestrator
+import bootstrap_data
 
 SECRETS_BRIDGE_KEYS = ("OPENAI_API_KEY", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
 
@@ -422,6 +423,19 @@ def main():
 
     st.set_page_config(page_title="個人化氣象決策系統", page_icon="🌤️", layout="wide", initial_sidebar_state="expanded")
     load_css()
+
+    # 系統邊界（見 ROADMAP.md「資料版本化」項目）：`Data/`整個被`.gitignore`排除
+    # 不進git版控（travel.db/Chroma索引/BM25索引加起來將近200MB，是可重新產生的
+    # 衍生資料不是原始碼）。全新部署（例如Streamlit Community Cloud剛clone完）
+    # 第一次啟動時`Data/`是空的，這裡從GitHub Release下載資料包補齊——`Data/`
+    # 已經存在的話（本機開發、或部署後的第二次以後啟動）`ensure_data_present()`
+    # 內部會直接跳過，不重複下載。放在`initialize_session_state()`之前執行，
+    # 因為那邊會建立`CCTVManager`讀`Data/cctv_enhanced.csv`。
+    _data_already_exists = bootstrap_data.data_exists()
+    print(f"[bootstrap_data] main(): data_exists()={_data_already_exists}", flush=True)
+    if not _data_already_exists:
+        with st.spinner("首次啟動，正在下載天氣/景點資料庫（約90MB，僅需一次）..."):
+            bootstrap_data.ensure_data_present()
 
     # 側欄：僅保留 OpenAI API Key 輸入（其餘選項已移除以簡化介面）
     with st.sidebar:
