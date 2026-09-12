@@ -92,6 +92,18 @@ def get_district_coords(city: str, district: str) -> Optional[tuple[float, float
     return None
 
 
+def get_all_city_districts() -> dict[str, list[str]]:
+    """回傳 {縣市全名: [行政區全名, ...]}，涵蓋 district_coords 表裡全部縣市
+    （見 collector/derive_district_coords.py）。給 WeatherChatbot 的關鍵字比對用，
+    這樣才不用把全台22縣市300多個行政區名稱手key進程式碼。"""
+    with _connect() as conn:
+        rows = conn.execute("SELECT city, district FROM district_coords ORDER BY city, district").fetchall()
+    result: dict[str, list[str]] = {}
+    for city, district in rows:
+        result.setdefault(city, []).append(district)
+    return result
+
+
 def resolve_unique_city_for_district(district: str) -> Optional[str]:
     """行政區名稱如果全臺只對應唯一一個縣市，直接回傳那個縣市，不用猜。用在
     `analyze_prompt_with_llm()` 校正 LLM 猜錯縣市的情況（例如 LLM 把「復興區」

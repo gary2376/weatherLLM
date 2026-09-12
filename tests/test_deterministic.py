@@ -126,6 +126,10 @@ def test_get_district_coords_returns_none_when_city_truly_unrecognized(fixture_d
     assert repository.get_district_coords("不存在的縣市", "不存在的區") is None
 
 
+def test_get_all_city_districts_groups_by_city(fixture_district_coords_db):
+    assert repository.get_all_city_districts() == {"彰化縣": ["彰化市", "鹿港鎮"]}
+
+
 def test_resolve_unique_city_for_district_returns_unique_match(fixture_district_coords_db):
     assert repository.resolve_unique_city_for_district("鹿港鎮") == "彰化縣"
 
@@ -357,4 +361,80 @@ def test_weather_chatbot_ambiguous_district_without_city_still_defaults_to_taich
         attraction_manager=_SpyAttractionManager(),
     )
     chatbot.process_message("北區有什麼景點")
+    assert captured["city"] == "臺中市"
+
+
+@pytest.mark.parametrize("query,expected_city", [
+    ("南投縣的景點跟住宿推薦", "南投縣"),
+    ("南投有什麼景點", "南投縣"),
+    ("屏東的美食", "屏東縣"),
+    ("花蓮有什麼住宿", "花蓮縣"),
+    ("澎湖有什麼景點", "澎湖縣"),
+    ("雲林有什麼美食", "雲林縣"),
+    ("金門有什麼景點", "金門縣"),
+    ("連江縣的景點", "連江縣"),
+])
+def test_weather_chatbot_covers_all_22_counties_not_just_original_5(query, expected_city):
+    """線上使用者實測發現：原本city_districts_map只手key了台中/台北/新竹/台南/
+    高雄5個縣市，資料庫明明有全台22縣市（見DATA_LICENSE.md／README），問南投
+    這類沒被涵蓋到的縣市會被誤導成搜尋台中。改成從repository.get_all_city_districts()
+    動態產生對照表，這裡驗證全部22縣市都真的搜得到，不是只有原本5個。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message(query)
+    assert captured["city"] == expected_city
+
+
+@pytest.mark.parametrize("query,expected_city", [
+    ("嘉義縣的景點", "嘉義縣"),
+    ("嘉義市的景點", "嘉義市"),
+    ("嘉義有什麼景點", "嘉義市"),  # 沒指定市/縣時維持「先猜市」的既有慣例
+    ("新竹縣的景點", "新竹縣"),
+    ("新竹市的景點", "新竹市"),
+])
+def test_weather_chatbot_explicit_county_suffix_disambiguates_city_vs_county(query, expected_city):
+    """新竹/嘉義都是市縣同名（去掉市/縣尾字後撞名）——原本只有靠行政區名稱（例如
+    「竹北」）才能校正到縣，使用者直接打「嘉義縣」這種明確字尾反而還是被導去
+    預設的嘉義市。這裡驗證明確打出「市」/「縣」字尾時能正確對應。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message(query)
+    assert captured["city"] == expected_city
+
+
+def test_weather_chatbot_nonexistent_taichung_county_does_not_redirect_to_bogus_city():
+    """台中縣2010年就併入臺中市了，現實中不存在——防禦性測試：確保
+    `city_suffix_variants`只收錄DB裡真的存在的字尾（台中只有「市」），不會因為
+    程式碼一律組出`alias+「縣」`字串去比對訊息，就把使用者打錯的「台中縣」
+    誤導去查一個不存在的縣市名稱，而是正常退回臺中市。"""
+    captured = {}
+
+    class _SpyAttractionManager:
+        def get_attractions(self, city=None, district=None, attraction_type=None, num_attractions=5):
+            captured["city"] = city
+            return pd.DataFrame()
+
+    chatbot = streamlit_app.WeatherChatbot(
+        cctv_manager=SimpleNamespace(cctv_data=pd.DataFrame(columns=["name", "geohash"])),
+        attraction_manager=_SpyAttractionManager(),
+    )
+    chatbot.process_message("台中縣的景點")
     assert captured["city"] == "臺中市"

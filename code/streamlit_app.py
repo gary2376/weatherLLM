@@ -205,6 +205,63 @@ class AttractionManager:
             if pd.notnull(row['latitude']) and pd.notnull(row['longitude']) else None, axis=1)
         return data.dropna(subset=['geohash'])
 
+def _short_district_form(name: str) -> str:
+    return name.replace("區", "").replace("市", "").replace("鄉", "").replace("鎮", "")
+
+
+def _build_city_maps() -> Tuple[Dict[str, List[str]], Dict[str, str], Dict[str, str], Dict[str, Dict[str, str]]]:
+    """從 repository.get_all_city_districts() 動態產生 WeatherChatbot 關鍵字比對用的
+    三份對照表，涵蓋 district_coords 表裡全部22縣市（原本手key只涵蓋台中/台北/
+    新竹/台南/高雄5個，其餘17個縣市問了都會落到「找不到」或誤判成台中）。
+
+    縣市簡稱去掉「市/縣」尾字後有兩組會撞名（新竹市/新竹縣都簡稱「新竹」，
+    嘉義市/嘉義縣都簡稱「嘉義」），這裡把撞名的兩個官方縣市併進同一個別名
+    分組、鍵盤搜尋清單合併，預設對到「市」那個（跟原本新竹的處理習慣一致：
+    單講「新竹」查新竹市），縣專屬的行政區名稱另外進 DISTRICT_CITY_OVERRIDE
+    校正——沿用原本「先猜市，行政區名稱能分辨縣市時才校正」的策略，不用
+    整套重寫比對邏輯。呼叫時機要在Data/已經下載完成之後（WeatherChatbot
+    建構時），不能放在module import當下就跑，那時候Data/可能還沒被
+    bootstrap_data補齊。
+
+    第四份`city_suffix_variants`（{別名: {"市"/"縣": 官方全名}}）只收錄真的
+    存在的那個字尾——像「台中」只有「市」這個key，不會因為程式碼寫死
+    `alias+"縣"`去比對訊息，就讓使用者打錯字的「台中縣」（2010年就併入
+    臺中市了，現實中不存在）被誤導去查一個不存在的縣市名稱。"""
+    raw = repository.get_all_city_districts()
+
+    alias_groups: Dict[str, List[str]] = {}
+    for full_name in raw:
+        alias = full_name[:-1].replace("臺", "台")
+        alias_groups.setdefault(alias, []).append(full_name)
+
+    city_districts_map: Dict[str, List[str]] = {}
+    city_name_map: Dict[str, str] = {}
+    district_override: Dict[str, str] = {}
+    city_suffix_variants: Dict[str, Dict[str, str]] = {}
+
+    for alias in sorted(alias_groups, key=lambda a: a != "台中"):  # 台中固定排最前，維持既有的預設fallback行為
+        variants = sorted(alias_groups[alias], key=lambda full: full[-1] != "市")  # 市優先當預設
+        default_full = variants[0]
+        city_name_map[alias] = default_full
+        city_suffix_variants[alias] = {full[-1]: full for full in variants}
+        default_districts = set(raw[default_full])
+
+        dist_list = [alias, alias + "市", alias + "縣", default_full[:-1]]
+        for full_name in variants:
+            dist_list.extend(raw[full_name])
+            if full_name != default_full:
+                for district in raw[full_name]:
+                    if district in default_districts:
+                        continue  # 目前資料沒有同名跨市/縣的行政區，防禦性跳過避免誤蓋
+                    district_override[district] = full_name
+                    short = _short_district_form(district)
+                    if short != district:
+                        district_override[short] = full_name
+        city_districts_map[alias] = dist_list
+
+    return city_districts_map, city_name_map, district_override, city_suffix_variants
+
+
 class WeatherChatbot:
     def __init__(self, cctv_manager: CCTVManager, attraction_manager: AttractionManager):
         self.cctv_manager = cctv_manager
@@ -214,14 +271,7 @@ class WeatherChatbot:
         self.attraction_query_keywords = ['景點', '好玩', '去處', '旅遊', '玩樂', '觀光', '參觀', '逛逛', '玩']
         self.restaurant_query_keywords = ['餐廳', '美食', '吃飯', '小吃', '好吃']
         self.hotel_query_keywords = ['住宿', '飯店', '旅館', '民宿', '住哪']
-
-    CITY_NAME_MAP = {"台中": "臺中市", "台北": "臺北市", "新竹": "新竹市", "台南": "臺南市", "高雄": "高雄市"}
-
-    # 「新竹」這個分組底下混了新竹市跟新竹縣的地名（竹北/湖口/竹東其實都在新竹縣，
-    # 不是新竹市）——CITY_NAME_MAP是整組對應同一個縣市，會把這幾個地名的天氣
-    # 查到新竹市去。其餘分組（台中/台北/台南/高雄）list裡的地名都真的屬於同一個
-    # 縣市，沒有這種混雜問題，不用比照處理。
-    DISTRICT_CITY_OVERRIDE = {"竹北": "新竹縣", "湖口": "新竹縣", "竹東": "新竹縣"}
+        self.city_districts_map, self.CITY_NAME_MAP, self.DISTRICT_CITY_OVERRIDE, self.CITY_SUFFIX_VARIANTS = _build_city_maps()
 
     def process_message(self, user_message: str, override_district: Optional[str] = None) -> Tuple[str, List[str], Optional[pd.DataFrame], Optional[str]]: # Added query_type_detected
         """
@@ -235,7 +285,7 @@ class WeatherChatbot:
         message_lower = message.lower()
         recommended_cctvs: List[str] = []
         recommended_attractions_df: Optional[pd.DataFrame] = None
-        city_districts_map = {'台中': ['中區', '北區', '西區', '南區', '東區', '北屯區', '西屯區', '南屯區', '太平區', '大里區', '霧峰區', '烏日區', '豐原區', '后里區', '石岡區', '東勢區', '和平區', '新社區', '潭子區', '大雅區', '神岡區', '大肚區', '沙鹿區', '龍井區', '梧棲區', '清水區', '大甲區', '外埔區', '大安區', '台中市', '臺中'], '台北': ['台北', '士林', '內湖', '大安', '信義', '中山', '中正', '萬華', '文山', '北投', '大同', '南港', '臺北'], '新竹': ['新竹', '竹北', '湖口', '竹東'], '台南': ['台南', '安南', '北區', '中西區', '東區', '南區', '永康', '安平', '新營', '臺南'], '高雄': ['高雄', '鳳山', '左營', '三民', '苓雅', '前鎮', '楠梓', '鼓山']}
+        city_districts_map = self.city_districts_map
         query_type, target_region, target_district = None, None, None
 
         # 審查發現的真bug：像「大安區」（台中/台北都有）、「北區」「東區」「南區」
@@ -247,7 +297,7 @@ class WeatherChatbot:
         mentioned_city_key = None
         for city_k, dist_list in city_districts_map.items():
             for alias in dist_list:
-                is_alias = (alias == city_k or alias == city_k + "市" or alias == city_k.replace("台", "臺"))
+                is_alias = alias in (city_k, city_k + "市", city_k + "縣", city_k.replace("台", "臺"))
                 if is_alias and alias in message:
                     mentioned_city_key = city_k
                     break
@@ -260,7 +310,7 @@ class WeatherChatbot:
         for city_k in search_order:
             dist_list = city_districts_map[city_k]
             for name_part in dist_list:
-                is_city_alias = (name_part == city_k or name_part == city_k + "市" or name_part == city_k.replace("台", "臺"))
+                is_city_alias = name_part in (city_k, city_k + "市", city_k + "縣", city_k.replace("台", "臺"))
                 if is_city_alias: continue
                 short_form = name_part.replace("區", "").replace("市", "").replace("鄉", "").replace("鎮", "")
                 if (name_part in message) or (len(short_form) >= 2 and short_form in message):
@@ -298,7 +348,16 @@ class WeatherChatbot:
             if not search_area:
                 search_area = "台中"
                 response_parts = [f"您似乎沒有指定地區，我將為您搜尋'{search_area}'的{place_map[search_type]}。"]
-            resolved_city = self.DISTRICT_CITY_OVERRIDE.get(target_district) or self.CITY_NAME_MAP.get(target_region, "臺中市")
+            explicit_variant = next(
+                (full for suffix, full in self.CITY_SUFFIX_VARIANTS.get(target_region, {}).items()
+                 if (target_region + suffix) in message),
+                None,
+            )
+            resolved_city = (
+                explicit_variant
+                or self.DISTRICT_CITY_OVERRIDE.get(target_district)
+                or self.CITY_NAME_MAP.get(target_region, "臺中市")
+            )
             recommended_attractions_df = self.attraction_manager.get_attractions(
                 city=resolved_city, district=(target_district or None), attraction_type=search_type)
             if recommended_attractions_df is not None and not recommended_attractions_df.empty:

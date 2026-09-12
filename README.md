@@ -16,7 +16,7 @@ streamlit_app.py::main()  ── Streamlit UI（地圖／CCTV圖釘／聊天框�
   │
   ▼
 orchestrator.py（LangGraph）
-  ├─ lightweight_node → WeatherChatbot（關鍵字比對，免費，涵蓋台中/台北/新竹/台南/高雄5大城市＋部分行政區）
+  ├─ lightweight_node → WeatherChatbot（關鍵字比對，免費，涵蓋全台22縣市＋所轄行政區，對照表從資料庫動態產生）
   ├─ supervisor_node  → 判斷要不要走進階路徑（天氣關鍵字觸發）
   └─ advanced_node    → system.py::get_weather_data()（需使用者自己貼 OpenAI key）
                             └─ weather_graph.py（LangGraph）
