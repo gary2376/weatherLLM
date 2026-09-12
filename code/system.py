@@ -55,10 +55,11 @@ import xml.etree.ElementTree as ET
 import sys
 
 from repository import (
-    get_attractions_for_area,
-    get_lodgings_for_area,
     get_district_coords,
     resolve_unique_city_for_district,
+    query_attractions,
+    query_lodgings,
+    get_places_by_ids,
 )
 import weather_graph
 
@@ -694,7 +695,7 @@ def _score_rag_fallback(fell_back: bool) -> None:
 
 
 @observe(name="rag_search")
-def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str, top_n: int) -> list:
+def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str, top_n: int) -> tuple:
     """優先用 rag.search() 做語意檢索（依使用者原始問句排序，內容含真正的
     description，不只是名稱），向量索引沒建、依賴沒裝、或該區在索引裡查無資料
     （例如住宿description是樣板句被篩掉、沒進索引）時，退回 repository 的
@@ -702,7 +703,13 @@ def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str
 
     景點類查詢若問句提到下雨/室內，帶上 weather_fit 硬 filter（indoor_ok/mixed）
     ——室內外這種硬分類之前實測過純語意檢索猜不準，必須靠 metadata 過濾，不能只讓
-    LLM 自己從 description 文字猜。"""
+    LLM 自己從 description 文字猜。
+
+    回傳 `(texts, place_rows)`：`texts` 給 LLM 組 prompt 用（維持原本格式不變）；
+    `place_rows`是含經緯度的list[dict]，給呼叫端（`weather_graph.py`）往上傳，
+    最終讓 Streamlit 地圖也能標出這條進階路徑推薦的地點——RAG命中的文件本身
+    metadata沒存座標（見`get_places_by_ids()`的說明），這裡額外用hit的id反查
+    一次DB補上座標；SQL退回路徑本來就是查完整列，直接一起回傳即可。"""
     if RAG_AVAILABLE:
         try:
             weather_fit = INDOOR_WEATHER_FITS if (place_type == "attraction" and _wants_indoor(user_prompt)) else None
@@ -711,13 +718,20 @@ def _get_places_for_area(user_prompt: str, area: str, city: str, place_type: str
             )
             if hits:
                 _score_rag_fallback(False)
-                return [h["text"] for h in hits]
+                ids = [h["id"].split(":", 1)[1] for h in hits if ":" in h.get("id", "")]
+                try:
+                    place_rows = get_places_by_ids(place_type, ids).to_dict("records")
+                except Exception:
+                    place_rows = []
+                return [h["text"] for h in hits], place_rows
         except Exception:
             pass
     _score_rag_fallback(True)
-    if place_type == "attraction":
-        return get_attractions_for_area(area, top_n=top_n, city=city)
-    return get_lodgings_for_area(area, top_n=top_n, city=city)
+    query_fn = query_attractions if place_type == "attraction" else query_lodgings
+    df = query_fn(city=city, district=area, top_n=top_n)
+    if df.empty:
+        return [], []
+    return df["name"].tolist(), df.to_dict("records")
 
 
 @observe(name="get_weather_data")
@@ -728,6 +742,7 @@ def get_weather_data(
     api_key: Optional[str] = None,
     previous_info: Optional[dict] = None,
     info_out: Optional[dict] = None,
+    places_out: Optional[list] = None,
 ) -> str:
     """
     主要入口：交給 `weather_graph.py` 的 LangGraph 節點圖執行：
@@ -753,10 +768,13 @@ def get_weather_data(
     info，存回session_state給下一輪用。這個函式跟`weather_graph.run_weather_graph()`
     一樣不直接處理Streamlit session_state——維持Phase 2訂下的「這幾個模組不碰
     streamlit」邊界。
+
+    `places_out`：同樣的模式，接住這輪attraction_node/lodging_node查到、含
+    經緯度的地點清單，給呼叫端畫地圖用。
     """
     return weather_graph.run_weather_graph(
         sys.modules[__name__], user_prompt, area_override, city_override,
-        api_key=api_key, previous_info=previous_info, info_out=info_out,
+        api_key=api_key, previous_info=previous_info, info_out=info_out, places_out=places_out,
     )
 
 if __name__ == "__main__":

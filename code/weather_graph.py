@@ -31,6 +31,8 @@ class WeatherState(TypedDict, total=False):
     raw_data: str
     attractions: list
     lodgings: list
+    attraction_places: list
+    lodging_places: list
     final_answer: str
     error: str
 
@@ -169,12 +171,12 @@ def _make_attraction_node(sysmod):
         # 承諾不符。這裡補上，失敗就當作查無資料處理（synthesis_node本來就有
         # 「抱歉沒有景點資料」的空清單分支），不讓整個回覆掛掉。
         try:
-            attractions = sysmod._get_places_for_area(
+            attractions, attraction_places = sysmod._get_places_for_area(
                 state["user_prompt"], state["area"], state["city"], "attraction", top_n=5
             )
         except Exception:
-            attractions = []
-        return {"attractions": attractions}
+            attractions, attraction_places = [], []
+        return {"attractions": attractions, "attraction_places": attraction_places}
 
     return attraction_node
 
@@ -184,12 +186,12 @@ def _make_lodging_node(sysmod):
         if state.get("error"):
             return {}
         try:
-            lodgings = sysmod._get_places_for_area(
+            lodgings, lodging_places = sysmod._get_places_for_area(
                 state["user_prompt"], state["area"], state["city"], "lodging", top_n=3
             )
         except Exception:
-            lodgings = []
-        return {"lodgings": lodgings}
+            lodgings, lodging_places = [], []
+        return {"lodgings": lodgings, "lodging_places": lodging_places}
 
     return lodging_node
 
@@ -288,12 +290,18 @@ def run_weather_graph(
     api_key: Optional[str] = None,
     previous_info: Optional[dict] = None,
     info_out: Optional[dict] = None,
+    places_out: Optional[list] = None,
 ) -> str:
     """`previous_info`：上一輪 intent_node 解析出的 info dict（多輪對話延續用，
     見 `_make_intent_node`）。`info_out`：呼叫端傳一個空dict進來，圖執行完會被
     `.update()`成這一輪最終的info——呼叫端存起來，下一輪當`previous_info`傳回來，
     這樣就不用改變這個函式原本回傳單一字串的介面（改回傳tuple要動到所有呼叫端，
-    這裡只有真的要做多輪對話的呼叫端才需要多傳這個參數）。"""
+    這裡只有真的要做多輪對話的呼叫端才需要多傳這個參數）。
+
+    `places_out`：跟`info_out`同一套模式——呼叫端傳一個空list進來，圖執行完會被
+    `.extend()`成這一輪attraction_node/lodging_node查到、含經緯度的地點清單，
+    讓Streamlit地圖也能標出進階路徑推薦的地點（原本這條路徑只回文字給LLM組
+    回覆，沒有結構化資料能畫地圖）。"""
     graph = _get_graph(sysmod)
     initial_state: WeatherState = {
         "user_prompt": user_prompt,
@@ -305,4 +313,7 @@ def run_weather_graph(
     final_state = graph.invoke(initial_state, config={"recursion_limit": MAX_GRAPH_STEPS})
     if info_out is not None:
         info_out.update(final_state.get("info") or {})
+    if places_out is not None:
+        places_out.extend(final_state.get("attraction_places") or [])
+        places_out.extend(final_state.get("lodging_places") or [])
     return final_state.get("final_answer") or sysmod._make_safe(f"{sysmod.ERROR_PREFIX} graph 執行未產生回覆。")

@@ -117,6 +117,7 @@ TAICHUNG_CENTER = (24.1477, 120.6736)
 
 def create_attraction_map(attractions_df: Optional[pd.DataFrame] = None) -> folium.Map:
     m = folium.Map(location=list(TAICHUNG_CENTER), zoom_start=11, tiles='OpenStreetMap')
+    plotted_coords = []
     if attractions_df is not None and not attractions_df.empty:
         for idx, row in attractions_df.iterrows():
             try: lat, lng = float(row['latitude']), float(row['longitude'])
@@ -127,6 +128,14 @@ def create_attraction_map(attractions_df: Optional[pd.DataFrame] = None) -> foli
             folium.Marker(location=[lat, lng], popup=folium.Popup(popup_content_attraction, max_width=270),
                           tooltip=f"{row['name']} ({place_label})",
                           icon=folium.Icon(color='green', icon='map-marker', prefix='fa')).add_to(m)
+            plotted_coords.append((lat, lng))
+    # 原本地圖一律固定中心在台中，不管實際推薦的地點在哪——問南投會出現圖釘，
+    # 但地圖畫面沒有跟著移過去，使用者要自己找。有真的畫出圖釘的話，改成依那些
+    # 圖釘的座標範圍自動置中/縮放；完全沒有圖釘（例如純天氣問句）才維持台中預設。
+    if plotted_coords:
+        lats = [c[0] for c in plotted_coords]
+        lngs = [c[1] for c in plotted_coords]
+        m.fit_bounds([[min(lats), min(lngs)], [max(lats), max(lngs)]])
     return m
 
 class AttractionManager:
@@ -479,12 +488,18 @@ def main():
             # 的問句能延續上一輪的地點。這裡只負責讀寫 session_state 這個
             # Streamlit-only 動作，實際的繼承/覆寫判斷邏輯在
             # weather_graph.py::_make_intent_node()，不碰 session_state。
+            # 進階（OpenAI）路徑推薦的地點——見system.py::_get_places_for_area()、
+            # weather_graph.py::run_weather_graph()的places_out說明，跟下面
+            # info_out是同一套「呼叫端傳空容器進去、圖執行完被填入」的模式。
+            advanced_places: list = []
+
             def _call_system_weather(prompt, override):
                 info_out: dict = {}
                 answer = get_system_weather_data(
                     prompt, override, api_key=effective_api_key,
                     previous_info=st.session_state.get('last_weather_info'),
                     info_out=info_out,
+                    places_out=advanced_places,
                 )
                 if info_out:
                     st.session_state['last_weather_info'] = info_out
@@ -503,7 +518,14 @@ def main():
                     api_key_available=api_key_available,
                 )
 
-            st.session_state.recommended_attractions_on_map = result.get("sl_attr_df")
+            # 進階路徑真的有找到地點的話，地圖優先畫這批（那才是使用者實際看到
+            # 的建議文字裡提到的地點）；沒有的話（沒貼key、或這輪只是問天氣沒問
+            # 景點/住宿）才退回輕量路徑lightweight_node自己查到的結果——
+            # lightweight_node每輪都會跑，不管有沒有走進階路徑。
+            if advanced_places:
+                st.session_state.recommended_attractions_on_map = pd.DataFrame(advanced_places)
+            else:
+                st.session_state.recommended_attractions_on_map = result.get("sl_attr_df")
 
             final_display_text = result.get("final_display_text") or \
                 "抱歉，目前無法處理您的請求，請再試一次或調整您的問題。"

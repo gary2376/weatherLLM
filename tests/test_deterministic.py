@@ -130,6 +130,26 @@ def test_get_all_city_districts_groups_by_city(fixture_district_coords_db):
     assert repository.get_all_city_districts() == {"彰化縣": ["彰化市", "鹿港鎮"]}
 
 
+def test_get_places_by_ids_returns_only_matching_rows(fixture_db):
+    """`get_places_by_ids()`是給RAG檢索結果（只有id，沒有座標，見DATA_LICENSE.md/
+    system.py的說明）回頭查真正座標用的——這裡驗證只回傳有指定id的列，且真的
+    含經緯度。"""
+    conn = sqlite3.connect(fixture_db)
+    conn.execute(
+        "INSERT INTO attractions VALUES ('a2','別的景點','臺中市','北屯區',24.2,120.7,'文化類','desc','mixed')"
+    )
+    conn.commit()
+    conn.close()
+    df = repository.get_places_by_ids("attraction", ["a1"])
+    assert len(df) == 1
+    assert df.iloc[0]["name"] == "某景點"
+    assert df.iloc[0]["latitude"] == 24.1
+
+
+def test_get_places_by_ids_empty_ids_returns_empty_df(fixture_db):
+    assert repository.get_places_by_ids("attraction", []).empty
+
+
 def test_resolve_unique_city_for_district_returns_unique_match(fixture_district_coords_db):
     assert repository.resolve_unique_city_for_district("鹿港鎮") == "彰化縣"
 
@@ -280,6 +300,40 @@ def test_fetch_forecast_open_meteo_matches_target_hour(monkeypatch):
     result = system.fetch_forecast_open_meteo(24.1, 120.6, target_date, target_hour="18:00")
     assert "18:00" in result
     assert "28.0" in result
+
+
+def test_get_places_for_area_rag_path_returns_texts_and_structured_rows(monkeypatch):
+    """RAG命中結果只有文字＋部分metadata（見collector/build_embeddings.py，沒存
+    座標），使用者實測回報「進階路徑推薦的地點沒有畫在地圖上」——修法是用hit的
+    Chroma id（格式`f"{kind}:{原始id}"`）反查一次DB拿座標。這裡驗證id有正確被
+    拆解、查詢，且回傳的第二個元素是含座標的structured rows。"""
+    monkeypatch.setattr(system, "RAG_AVAILABLE", True)
+    fake_hits = [{"id": "attraction:A1", "text": "某景點的介紹文字"}]
+    monkeypatch.setattr(system, "rag_module", SimpleNamespace(search=lambda *a, **k: fake_hits))
+
+    captured = {}
+
+    def fake_get_places_by_ids(kind, ids):
+        captured["kind"] = kind
+        captured["ids"] = ids
+        return pd.DataFrame([{"name": "某景點", "latitude": 24.1, "longitude": 120.6}])
+
+    monkeypatch.setattr(system, "get_places_by_ids", fake_get_places_by_ids)
+
+    texts, place_rows = system._get_places_for_area("問句", "西屯區", "臺中市", "attraction", top_n=5)
+    assert texts == ["某景點的介紹文字"]
+    assert captured == {"kind": "attraction", "ids": ["A1"]}
+    assert place_rows == [{"name": "某景點", "latitude": 24.1, "longitude": 120.6}]
+
+
+def test_get_places_for_area_fallback_path_returns_texts_and_structured_rows(fixture_db, monkeypatch):
+    """RAG不可用時退回SQL查詢——這條路徑本來就查得到完整列（含座標），驗證
+    第二個回傳值真的是那份完整資料，不是只回名稱清單。"""
+    monkeypatch.setattr(system, "RAG_AVAILABLE", False)
+    texts, place_rows = system._get_places_for_area("問句", "西屯區", "臺中市", "attraction", top_n=5)
+    assert texts == ["某景點"]
+    assert len(place_rows) == 1
+    assert place_rows[0]["latitude"] == 24.1
 
 
 def test_weather_chatbot_resolves_zhubei_to_hsinchu_county_not_city():
@@ -463,3 +517,26 @@ def test_weather_chatbot_combines_attraction_and_hotel_when_both_asked():
     # 地圖用的place_label計算不該因為不同類型欄位混在一起（景點有category、
     # 住宿有price_range，彼此都沒有對方那欄）而把NaN當成truthy值誤判成標籤
     streamlit_app.create_attraction_map(df)  # 不該丟例外
+
+
+def test_create_attraction_map_recenters_on_plotted_points_not_fixed_taichung():
+    """使用者實測回報：問南投的景點，圖釘有畫出來，但地圖畫面中心還是固定在
+    台中，要自己滑過去找。原本`create_attraction_map()`不管實際畫了什麼都
+    固定用台中當中心/縮放，這裡驗證有圖釘時會改成用`fit_bounds()`依圖釘座標
+    自動置中縮放（會反映在render出來的HTML裡）。"""
+    df = pd.DataFrame([
+        {"name": "某景點", "latitude": 23.9, "longitude": 120.9, "category": "文化類"},
+    ])
+    m = streamlit_app.create_attraction_map(df)
+    html = m._repr_html_()
+    assert "fitBounds" in html
+    # 台中座標不該出現在fit_bounds的範圍參數裡——這筆資料是南投的座標
+    assert "23.9" in html and "120.9" in html
+
+
+def test_create_attraction_map_keeps_taichung_default_when_no_points():
+    """完全沒有可畫的圖釘（例如純天氣問句，attractions_df是None）時，維持原本
+    的台中預設中心，不該呼叫fit_bounds（沒有座標可以fit）。"""
+    m = streamlit_app.create_attraction_map(None)
+    html = m._repr_html_()
+    assert "fitBounds" not in html

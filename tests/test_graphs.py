@@ -27,7 +27,9 @@ def _make_fake_sysmod(**overrides):
         get_latest_radar_summary=lambda: "雷達摘要",
         fetch_current_weather_open_meteo=lambda area=None, city=None: "即時天氣",
         _get_places_for_area=lambda user_prompt, area, city, place_type, top_n: (
-            ["某景點"] if place_type == "attraction" else ["某住宿"]
+            (["某景點"], [{"name": "某景點", "latitude": 24.0, "longitude": 121.0}])
+            if place_type == "attraction"
+            else (["某住宿"], [{"name": "某住宿", "latitude": 24.1, "longitude": 121.1}])
         ),
         generate_answer_from_user_prompt_and_data=lambda user_prompt, raw_data, api_key=None: "這是最終建議文字",
         _score_node_failure=lambda layer, failed: None,
@@ -59,6 +61,19 @@ def test_weather_graph_merges_parallel_attraction_and_lodging_into_raw_data():
     assert "某住宿" in captured["raw_data"]
 
 
+def test_weather_graph_places_out_collects_both_attraction_and_lodging_places():
+    """使用者實測回報：進階（OpenAI）路徑推薦的地點沒有畫在地圖上——這條路徑
+    原本只把地點名稱塞進給LLM的raw_data文字，沒有結構化座標資料能傳回呼叫端。
+    `places_out`是跟`info_out`同一套「呼叫端傳空list進來，圖執行完被extend()」
+    的模式，這裡驗證attraction_node跟lodging_node兩邊查到的地點都真的進了
+    這個list。"""
+    sysmod = _make_fake_sysmod()
+    places_out: list = []
+    weather_graph.run_weather_graph(sysmod, "西屯區明天天氣如何", places_out=places_out)
+    names = {p["name"] for p in places_out}
+    assert names == {"某景點", "某住宿"}
+
+
 def test_weather_graph_attraction_node_failure_degrades_gracefully():
     """`_get_places_for_area()`的SQL退回路徑本身出錯（例如DB出問題）時，
     attraction_node/lodging_node不該把例外往上炸穿整個graph——應該當作查無資料
@@ -84,7 +99,7 @@ def test_weather_graph_intent_error_short_circuits_downstream_nodes():
 
     def track_places(user_prompt, area, city, place_type, top_n):
         calls["attraction"] += 1
-        return []
+        return [], []
 
     def track_synthesis(user_prompt, raw_data):
         calls["synthesis"] += 1

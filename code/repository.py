@@ -92,6 +92,27 @@ def get_district_coords(city: str, district: str) -> Optional[tuple[float, float
     return None
 
 
+_TABLE_COLS_BY_KIND = {
+    "attraction": ("attractions", ATTRACTION_COLS),
+    "lodging": ("lodgings", LODGING_COLS),
+}
+
+
+def get_places_by_ids(kind: str, ids: list) -> pd.DataFrame:
+    """依主鍵id清單撈出完整列（含經緯度）。用途：RAG檢索（`rag.py`/`hybrid_search.py`）
+    的Chroma metadata只存了city/district/category這些欄位，沒有座標——嵌入建置時
+    （`collector/build_embeddings.py`）沒把座標塞進metadata，因為原本只需要文字
+    給LLM讀。但文件的Chroma id本身就是`f"{kind}:{原始id}"`（例如
+    `"attraction:Attraction_345040000G_000001"`），可以拆出kind跟原始id回頭查
+    這裡拿到真正座標，讓進階（OpenAI）路徑推薦的地點也能畫在地圖上。"""
+    if kind not in _TABLE_COLS_BY_KIND or not ids:
+        return pd.DataFrame()
+    table, cols = _TABLE_COLS_BY_KIND[kind]
+    placeholders = ",".join("?" for _ in ids)
+    with _connect() as conn:
+        return pd.read_sql_query(f"SELECT {cols} FROM {table} WHERE id IN ({placeholders})", conn, params=list(ids))
+
+
 def get_all_city_districts() -> dict[str, list[str]]:
     """回傳 {縣市全名: [行政區全名, ...]}，涵蓋 district_coords 表裡全部縣市
     （見 collector/derive_district_coords.py）。給 WeatherChatbot 的關鍵字比對用，
