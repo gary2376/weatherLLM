@@ -32,6 +32,12 @@ REQUIRED_PATHS = ["travel.db", "bm25_index.pkl", "cctv_enhanced.csv", "chroma"]
 MIN_TRAVEL_DB_BYTES = 1_000_000
 
 
+def _log(msg: str) -> None:
+    # 容器環境裡stdout對pipe是block-buffered，不flush的話print()可能一直卡在
+    # buffer裡，Streamlit Cloud的log面板看不到——之前排查線上bug時就是卡在這裡
+    print(msg, flush=True)
+
+
 def _travel_db_has_data(db_path: Path) -> bool:
     """線上部署真的發生過的bug：只檢查檔案存不存在不夠——`sqlite3.connect()`
     對一個不存在的路徑會靜靜建立一個空的新資料庫，不會報錯。如果任何原因
@@ -85,10 +91,10 @@ def ensure_data_present(url: str = DATA_RELEASE_URL, timeout: int = 300) -> None
     bug時就是卡在不知道這個function到底有沒有被呼叫到、跑到哪一步就停了。
     `print()`會直接進stdout，Streamlit Cloud的log面板看得到。"""
     if data_exists():
-        print("[bootstrap_data] Data/ 已存在且驗證通過，跳過下載")
+        _log("[bootstrap_data] Data/ 已存在且驗證通過，跳過下載")
         return
 
-    print(f"[bootstrap_data] Data/ 缺少或驗證失敗，開始從 {url} 下載")
+    _log(f"[bootstrap_data] Data/ 缺少或驗證失敗，開始從 {url} 下載")
     with tempfile.TemporaryDirectory(dir=DATA_DIR.parent) as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
         resp = requests.get(url, timeout=timeout, stream=True)
@@ -99,13 +105,13 @@ def ensure_data_present(url: str = DATA_RELEASE_URL, timeout: int = 300) -> None
                 f.write(chunk)
             f.flush()
             os.fsync(f.fileno())  # 確保下載內容真的落到磁碟，不是還停留在OS的write buffer裡
-        print(f"[bootstrap_data] 下載完成，tar大小={tar_path.stat().st_size} bytes")
+        _log(f"[bootstrap_data] 下載完成，tar大小={tar_path.stat().st_size} bytes")
 
         extract_dir = tmp_dir / "extracted"
         extract_dir.mkdir()
         with tarfile.open(tar_path) as tar:
             tar.extractall(extract_dir)
-        print("[bootstrap_data] 解壓縮完成，開始驗證 travel.db")
+        _log("[bootstrap_data] 解壓縮完成，開始驗證 travel.db")
 
         if not _travel_db_has_data(extract_dir / "travel.db"):
             raise RuntimeError(
@@ -116,9 +122,9 @@ def ensure_data_present(url: str = DATA_RELEASE_URL, timeout: int = 300) -> None
         # 別的process可能在我們下載的這段時間已經搶先完成了，那就用現成的，
         # 不要用自己這份去覆蓋一個可能已經是完整的資料
         if data_exists():
-            print("[bootstrap_data] 另一個session已經先完成下載，直接使用現成的")
+            _log("[bootstrap_data] 另一個session已經先完成下載，直接使用現成的")
             return
         if DATA_DIR.exists():
             shutil.rmtree(DATA_DIR, ignore_errors=True)
         os.replace(extract_dir, DATA_DIR)
-        print("[bootstrap_data] 已將解壓縮結果換入 Data/，完成")
+        _log("[bootstrap_data] 已將解壓縮結果換入 Data/，完成")
