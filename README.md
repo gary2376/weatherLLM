@@ -1,8 +1,10 @@
 # weatherLLM — 全台天氣＋旅遊建議系統
 
+**🔗 線上試用：[weatherllm-e2qqgtnwwcauyzyldyqt8q.streamlit.app](https://weatherllm-e2qqgtnwwcauyzyldyqt8q.streamlit.app/)**
+
 Streamlit 打造的天氣查詢＋景點/住宿推薦系統，資料涵蓋全台 22 縣市（不是只有台中）。
 
-**目前狀態：程式碼已公開，但尚未部署上線**，開發環境已可跑（見下方「本機執行」），Streamlit Community Cloud 部署還沒開始（見下方「MCP tool server」以外的雲端部署仍在規劃中）。
+**目前狀態：已部署上線（Streamlit Community Cloud）**。免費方案冷啟動可能需要等待幾秒到一分鐘喚醒；輕量路徑（關鍵字比對、CCTV/景點地圖）不需要任何 API key 就能用，進階自然語言建議需要在側欄貼上自己的 OpenAI API Key（BYOK，不會被儲存）。開發環境設定見下方「本機執行」。
 
 ## 系統長什麼樣
 
