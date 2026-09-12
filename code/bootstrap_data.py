@@ -78,10 +78,17 @@ def ensure_data_present(url: str = DATA_RELEASE_URL, timeout: int = 300) -> None
     `travel.db`的race condition，改成先在別處完整組好再一次換過去，把「寫入
     中」這個危險視窗從整段下載+解壓縮時間（可能一兩分鐘）縮到`os.replace()`
     那一個原子操作，大幅降低撞在一起的機率（不是理論上完全消除，但對這種
-    低流量個人專案已經足夠，不需要再上檔案鎖這種更重的機制）。"""
+    低流量個人專案已經足夠，不需要再上檔案鎖這種更重的機制）。
+
+    這裡的`print()`不是裝飾——`st.spinner()`的文字只在瀏覽器端看得到，
+    Streamlit Cloud後台的「Manage app」log面板完全看不到，之前排查線上
+    bug時就是卡在不知道這個function到底有沒有被呼叫到、跑到哪一步就停了。
+    `print()`會直接進stdout，Streamlit Cloud的log面板看得到。"""
     if data_exists():
+        print("[bootstrap_data] Data/ 已存在且驗證通過，跳過下載")
         return
 
+    print(f"[bootstrap_data] Data/ 缺少或驗證失敗，開始從 {url} 下載")
     with tempfile.TemporaryDirectory(dir=DATA_DIR.parent) as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
         resp = requests.get(url, timeout=timeout, stream=True)
@@ -92,11 +99,13 @@ def ensure_data_present(url: str = DATA_RELEASE_URL, timeout: int = 300) -> None
                 f.write(chunk)
             f.flush()
             os.fsync(f.fileno())  # 確保下載內容真的落到磁碟，不是還停留在OS的write buffer裡
+        print(f"[bootstrap_data] 下載完成，tar大小={tar_path.stat().st_size} bytes")
 
         extract_dir = tmp_dir / "extracted"
         extract_dir.mkdir()
         with tarfile.open(tar_path) as tar:
             tar.extractall(extract_dir)
+        print("[bootstrap_data] 解壓縮完成，開始驗證 travel.db")
 
         if not _travel_db_has_data(extract_dir / "travel.db"):
             raise RuntimeError(
@@ -107,7 +116,9 @@ def ensure_data_present(url: str = DATA_RELEASE_URL, timeout: int = 300) -> None
         # 別的process可能在我們下載的這段時間已經搶先完成了，那就用現成的，
         # 不要用自己這份去覆蓋一個可能已經是完整的資料
         if data_exists():
+            print("[bootstrap_data] 另一個session已經先完成下載，直接使用現成的")
             return
         if DATA_DIR.exists():
             shutil.rmtree(DATA_DIR, ignore_errors=True)
         os.replace(extract_dir, DATA_DIR)
+        print("[bootstrap_data] 已將解壓縮結果換入 Data/，完成")
