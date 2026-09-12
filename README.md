@@ -1,8 +1,8 @@
 # weatherLLM — 全台天氣＋旅遊建議系統
 
-Streamlit 打造的天氣查詢＋景點/住宿推薦系統，資料涵蓋全台 22 縣市（不是只有台中）。開發過程與每個階段的決策記錄在 [ROADMAP.md](ROADMAP.md)。
+Streamlit 打造的天氣查詢＋景點/住宿推薦系統，資料涵蓋全台 22 縣市（不是只有台中）。
 
-**目前狀態：尚未正式公開上線**，開發環境已可跑（見下方「本機執行」），Streamlit Community Cloud 部署與上線前檢查清單還在 ROADMAP.md 的 Phase 0/1/4 追蹤中，尚未完成。
+**目前狀態：程式碼已公開，但尚未部署上線**，開發環境已可跑（見下方「本機執行」），Streamlit Community Cloud 部署還沒開始（見下方「MCP tool server」以外的雲端部署仍在規劃中）。
 
 ## 系統長什麼樣
 
@@ -45,14 +45,14 @@ orchestrator.py（LangGraph）
 - 天氣：Open-Meteo（即時 + 預報）
 - 行政區座標：從上述景點/住宿/餐飲三張表在每個縣市＋行政區內取平均座標推算（見 `collector/derive_district_coords.py`），不是手打的清單
 
-收集流程與每個資料表的欄位/筆數/資料品質稽核記錄在 ROADMAP.md Phase 0。
+收集流程與每個資料表的欄位/筆數/資料品質稽核記錄在開發者的私人筆記中。
 
 ## 技術重點
 
-- **RAG**：`code/hybrid_search.py`（BM25 + 語意檢索 + RRF 融合）比純語意檢索的 Hit Rate@5 高 8.3 個百分點（91.67% vs 83.33%，24 組人工核對過的 ground truth，見 ROADMAP.md Phase 1）
+- **RAG**：`code/hybrid_search.py`（BM25 + 語意檢索 + RRF 融合）比純語意檢索的 Hit Rate@5 高 8.3 個百分點（91.67% vs 83.33%，24 組人工核對過的 ground truth）
 - **本地免費 embedding**：`BAAI/bge-small-zh-v1.5`（透過 `fastembed`），避免使用者查詢時持續累積 OpenAI embedding 費用
 - **LangGraph 多節點編排**：天氣查詢拆成 `intent_node → weather_node → attraction_node/lodging_node（平行）→ synthesis_node`；另一層 supervisor + worker graph 決定要不要呼叫 OpenAI 進階路徑，取代原本寫死在 UI 裡的 if/else
-- **確定性修正取代模型猜測**：意圖解析的日期加減、行政區↔縣市對應這類「答案本來就在資料庫裡」的判斷，改用程式碼查表而不是讓 LLM 猜（詳見 ROADMAP.md Phase 6，把準確率從 76.5% 修到 93.8%）
+- **確定性修正取代模型猜測**：意圖解析的日期加減、行政區↔縣市對應這類「答案本來就在資料庫裡」的判斷，改用程式碼查表而不是讓 LLM 猜（把準確率從 76.5% 修到 93.8%）
 - **兩層測試**：`tests/`（deterministic pytest，不打 LLM，接 CI）+ `eval/`（真的呼叫 OpenAI 的 live eval，手動/排程觸發，避免每次 push 都花錢）
 
 ## 本機執行
@@ -73,7 +73,7 @@ python eval/run_intent_eval.py         # 意圖解析準確率 eval，會打 Ope
 
 ## MCP tool server
 
-`code/mcp_server.py` 把景點/住宿/餐廳/行政區座標查詢包成 MCP tool，讓 Claude Desktop／Claude Code 等 MCP client 能直接查這些資料，不用透過 Streamlit 介面（跟既有 [cwa-mcp-server](https://github.com/gary2376/cwa-mcp-server) 同一套 SDK／寫法）。需要 Python >=3.10（`mcp[cli]` 套件要求，見 ROADMAP.md Phase 2）。
+`code/mcp_server.py` 把景點/住宿/餐廳/行政區座標查詢包成 MCP tool，讓 Claude Desktop／Claude Code 等 MCP client 能直接查這些資料，不用透過 Streamlit 介面（跟既有 [cwa-mcp-server](https://github.com/gary2376/cwa-mcp-server) 同一套 SDK／寫法）。需要 Python >=3.10（`mcp[cli]` 套件要求）。
 
 ```json
 {

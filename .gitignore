@@ -48,3 +48,6 @@ dist/
 
 # other
 *.pyc
+
+# 開發者私人筆記，不隨repo公開（見git history purge記錄）
+ROADMAP.md
