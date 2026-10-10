@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      # fastembed_cache深掛在/app/Data/fastembed_cache，故意不整個Data/掛進來——
+      # 整個目錄掛volume會蓋掉Dockerfile build階段warmup進image layer的模型快取，
+      # 讓每次container啟動都要重新連外網下載模型，跟image warmup的目的互相打架。
+      # 只掛真正需要跨rebuild保留、且由host端collector腳本產生的資料檔。
+      - ./Data/chroma:/app/Data/chroma
+      - ./Data/travel.db:/app/Data/travel.db
+      - ./Data/bm25_index.pkl:/app/Data/bm25_index.pkl
+    env_file:
+      - .env
+    restart: unless-stopped

@@ -1,0 +1,365 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "weatherLLM Agent 請求流程",
+    "subtitle": "進度快照（2026-10-07）：RAG＋Agent＋Caching＋Web UI＋Docker全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復；下一步是公開部署(Oracle VM)＋CICD",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    {
+      "id": "ui",
+      "label": "使用者介面"
+    },
+    {
+      "id": "agent",
+      "label": "Agent Runtime + 防呆"
+    },
+    {
+      "id": "tools",
+      "label": "工具執行與紀錄"
+    },
+    {
+      "id": "deploy",
+      "label": "部署管線(CI/CD，2026-10-07規劃)"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "接收查詢",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "reasoning",
+      "label": "推理+選工具",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "execution",
+      "label": "執行+回應",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "concurrency_lock",
+      "label": "🔒 threading.Lock 併發保護",
+      "lane": "tools",
+      "fromCol": 4,
+      "toCol": 4,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "user",
+    "webui",
+    "planner",
+    "router",
+    "guardrail",
+    "rag_tool",
+    "final"
+  ],
+  "nodes": [
+    {
+      "id": "user",
+      "lane": "ui",
+      "col": 0,
+      "type": "external",
+      "label": "使用者",
+      "sublabel": "輸入查詢+OpenAI Key",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "webui",
+      "lane": "ui",
+      "col": 1,
+      "type": "frontend",
+      "label": "✅ Streamlit Web UI",
+      "sublabel": "聊天+地圖並排",
+      "tag": "已驗證(含地圖連動)",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "planner",
+      "lane": "agent",
+      "col": 2,
+      "type": "backend",
+      "label": "✅ Agent Planner",
+      "sublabel": "ReAct推理",
+      "tag": "已驗證(多輪歷史隔離)",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "router",
+      "lane": "agent",
+      "col": 3,
+      "type": "backend",
+      "label": "✅ Tool Router",
+      "sublabel": "選RAG或天氣工具",
+      "tag": "已驗證",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "guardrail",
+      "lane": "agent",
+      "col": 3,
+      "type": "security",
+      "label": "✅ Guardrail",
+      "sublabel": "limit=10 / cost cap",
+      "tag": "已驗證(超額測試)",
+      "width": 380,
+      "height": 140,
+      "yOffset": 185
+    },
+    {
+      "id": "aborted",
+      "lane": "agent",
+      "col": 4,
+      "type": "security",
+      "label": "✅ Abort",
+      "sublabel": "超過安全上限中斷",
+      "tag": "已驗證",
+      "width": 380,
+      "height": 140,
+      "yOffset": 185
+    },
+    {
+      "id": "rag_tool",
+      "lane": "tools",
+      "col": 4,
+      "type": "messagebus",
+      "label": "✅ RAG Tool",
+      "sublabel": "hybrid_search + rerank",
+      "tag": "防幻覺硬覆寫+doc_ids→地圖",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "weather_tool",
+      "lane": "tools",
+      "col": 4,
+      "type": "messagebus",
+      "label": "✅ Weather Tool",
+      "sublabel": "TTL cache 45分",
+      "tag": "已驗證+isError防呆",
+      "width": 380,
+      "height": 140,
+      "yOffset": 185
+    },
+    {
+      "id": "trace",
+      "lane": "agent",
+      "col": 1,
+      "type": "database",
+      "label": "✅ Langfuse Trace",
+      "sublabel": "cost + 步驟紀錄",
+      "tag": "斷線自動降級重試",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "final",
+      "lane": "tools",
+      "col": 5,
+      "type": "backend",
+      "label": "✅ 最終回答",
+      "sublabel": "文字+地圖標示",
+      "tag": "已驗證(真實多輪對話)",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "ci_pipeline",
+      "lane": "deploy",
+      "col": 0,
+      "type": "cloud",
+      "label": "✅ CI Pipeline",
+      "sublabel": "pytest+build驗證",
+      "tag": "已寫好，未在GitHub觸發過",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "cd_pipeline",
+      "lane": "deploy",
+      "col": 1,
+      "type": "cloud",
+      "label": "🔲 CD Pipeline",
+      "sublabel": "推GHCR→SSH部署",
+      "tag": "規劃方向已定，待VM建好才能接",
+      "width": 380,
+      "height": 140
+    },
+    {
+      "id": "oracle_vm",
+      "lane": "deploy",
+      "col": 2,
+      "type": "cloud",
+      "label": "🔲 Oracle Free VM",
+      "sublabel": "docker compose up",
+      "tag": "待使用者確認後手把手建置",
+      "width": 380,
+      "height": 140
+    }
+  ],
+  "edges": [
+    {
+      "id": "user-webui",
+      "from": "user",
+      "to": "webui",
+      "variant": "default",
+      "width": 2.5
+    },
+    {
+      "id": "webui-planner",
+      "from": "webui",
+      "to": "planner",
+      "label": "送出查詢+Key",
+      "variant": "emphasis",
+      "width": 2.5
+    },
+    {
+      "id": "planner-router",
+      "from": "planner",
+      "to": "router",
+      "variant": "default",
+      "width": 2.5
+    },
+    {
+      "id": "router-guardrail",
+      "from": "router",
+      "to": "guardrail",
+      "label": "呼叫工具前檢查",
+      "variant": "security",
+      "width": 2.5
+    },
+    {
+      "id": "guardrail-aborted",
+      "from": "guardrail",
+      "to": "aborted",
+      "label": "超標",
+      "variant": "security",
+      "role": "error",
+      "width": 2.5
+    },
+    {
+      "id": "guardrail-rag",
+      "from": "guardrail",
+      "to": "rag_tool",
+      "label": "通過",
+      "variant": "emphasis",
+      "width": 2.5
+    },
+    {
+      "id": "guardrail-weather",
+      "from": "guardrail",
+      "to": "weather_tool",
+      "variant": "default",
+      "role": "branch",
+      "width": 2.5
+    },
+    {
+      "id": "rag-final",
+      "from": "rag_tool",
+      "to": "final",
+      "label": "整理成答案",
+      "variant": "emphasis",
+      "width": 2.5
+    },
+    {
+      "id": "weather-final",
+      "from": "weather_tool",
+      "to": "final",
+      "label": "併入回答",
+      "variant": "dashed",
+      "role": "branch",
+      "width": 2.5
+    },
+    {
+      "id": "router-planner-loop",
+      "from": "router",
+      "to": "planner",
+      "label": "多輪工具調用",
+      "variant": "dashed",
+      "role": "return",
+      "width": 2.5
+    },
+    {
+      "id": "planner-trace",
+      "from": "planner",
+      "to": "trace",
+      "label": "記錄步驟+中斷",
+      "variant": "dashed",
+      "width": 2.5
+    },
+    {
+      "id": "ci-cd",
+      "from": "ci_pipeline",
+      "to": "cd_pipeline",
+      "label": "測試通過",
+      "variant": "dashed",
+      "width": 2.5
+    },
+    {
+      "id": "cd-vm",
+      "from": "cd_pipeline",
+      "to": "oracle_vm",
+      "label": "部署",
+      "variant": "dashed",
+      "width": 2.5
+    },
+    {
+      "id": "vm-webui",
+      "from": "oracle_vm",
+      "to": "webui",
+      "label": "實際服務位置",
+      "variant": "dashed",
+      "role": "return",
+      "width": 2.5
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "✅ 已完成（RAG＋Agent＋Caching＋Web UI＋Docker，2026-10-07）",
+      "items": [
+        "RAG Tool：22縣市100%命中、Codex獨立複核修過7個真bug、Eval v1(壓力測試)+v2(唯一指向性，Context Recall 0.89)",
+        "Agent核心迴圈：Planner/Router/Guardrail/RAG Tool/Weather Tool全部驗證——多輪對話指代消解成功、多需求單輪query正確拆成多個工具呼叫、guardrail正確擋下、天氣工具真實API呼叫成功",
+        "Caching：RAG(lru_cache)+天氣(TTL 45分鐘+併發去重複)全部完成，fastembed模型快取改專案內固定路徑(原本在系統temp目錄會被清掉)",
+        "Web UI：Streamlit對話(固定高度捲動+輸入框釘住)＋地圖(pydeck，淺色底圖)並排顯示，對話命中的RAG地點用content_and_artifact機制回傳doc_ids，地圖以橘色光暈badge標示，多使用者OpenAI key隔離",
+        "全端錯誤處理防線：RAG storage失敗/Langfuse執行期斷線/MCP isError全部補防護，詳細清單見ARCHITECTURE.md第3節",
+        "2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest+兩支smoke test+真實三輪對話瀏覽器驗證全數通過",
+        "2026-10-07：Docker單一container(Dockerfile+docker-compose+fastembed build-time warmup)完成並真實驗證——本機裝colima補齊Docker環境，`docker compose up`起container後用真實多輪對話(RAG+真實CWA天氣查詢)驗證容器內cwa-mcp-server subprocess、RAG資料掛載、OpenAI呼叫全部正常，過程中抓到colima預設看不到外接磁碟導致bind mount變空目錄的真bug並修正"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "🔲 尚未開始",
+      "items": [
+        "Token-level streaming刻意排除在目前範圍外(需重構ask()內部guardrail邏輯，待之後評估)",
+        "公開部署：已選定Oracle Cloud Always Free VM(可沿用現有docker-compose)，使用者要求之後手把手引導建置，目前尚未動手",
+        "CICD(確認做CI+CD全自動)：CI workflow(pytest+docker build驗證)已寫好但還沒在GitHub上觸發過；CD(build→推GHCR→SSH部署到VM)規劃方向已定，需VM建好才能接；測試範圍(smoke test要不要進CI、部署後資料真實性驗證、靜態分析)待決定，詳見ARCHITECTURE.md第6節"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "設計重點 + Cache設計",
+      "items": [
+        "單一ReAct agent，5個工具(RAG+4個天氣工具)，未達multi-agent門檻",
+        "Guardrail是防呆天花板：recursion_limit=10、單session cost cap US$0.05-0.10，非預期日常會碰到",
+        "RAG Tool：✅lru_cache，資料只在手動重跑build_embeddings.py時變動",
+        "Weather Tool：✅TTL 45分鐘手刻dict cache+threading.Lock+in-flight Future去重複，CWA資料以小時計更新"
+      ]
+    }
+  ]
+}

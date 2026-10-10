@@ -1,100 +1,97 @@
-"""RAG 查詢層：對 Data/chroma/ 的 travel collection 做語意檢索＋metadata 精確過濾。
-只服務 attractions/lodgings(篩過)/restaurants(篩過) 這三類有意義的自由文字內容，
-索引怎麼建見 collector/build_embeddings.py。transit_stations/district_coords 等
-純結構化表不在這裡，走 repository.py 的 SQL 查詢——不是每個表都適合語意檢索。
+"""RAG查詢層對外唯一入口，agent的retrieval tool呼叫這支就好。
 
-embedding 用本地免費模型（collector/embedding_fn.py 的 bge-small-zh-v1.5），不是
-OpenAI API：使用者每次打字查詢都要重新算一次 embedding，用付費 API 訪客越多越花錢，
-本地 ONNX 模型下載一次後永久免費、CPU 就能跑。
+流程：hybrid_search.search()拿RRF融合後的候選id → 用bm25_util現成的
+ids/texts/metadatas當id→文件內容的查表(建索引時是同一份docs，兩邊id保證對得
+上，不用再查一次Chroma拿文字) → reranker_fn精選Top-5 → 組成給LLM讀的context。
 """
 import sys
-from functools import lru_cache
+import threading
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, TypedDict
 
-import chromadb
+COLLECTOR_DIR = Path(__file__).resolve().parents[1] / "collector"
+sys.path.insert(0, str(COLLECTOR_DIR))
+import bm25_util  # noqa: E402
 
-# embedding_fn.py 放在 collector/（跟 build_embeddings.py 共用同一份實作，
-# 兩邊必須用同一個模型算出來的向量才能互相比對），這裡加進 sys.path 才 import 得到
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "collector"))
-from embedding_fn import get_embedding_function  # noqa: E402
+import hybrid_search
+import reranker_fn
 
-CHROMA_PATH = Path(__file__).resolve().parents[1] / "Data" / "chroma"
-COLLECTION_NAME = "travel"
-
-_collection = None
+TOP_K_FINAL = 5
 
 
-def _get_collection():
-    global _collection
-    if _collection is None:
-        client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-        _collection = client.get_collection(COLLECTION_NAME, embedding_function=get_embedding_function())
-    return _collection
+class Document(TypedDict):
+    id: str
+    text: str
+    metadata: dict
 
 
-def search(
-    query: str,
-    city: Optional[str] = None,
-    district: Optional[str] = None,
-    type_: Optional[str] = None,
-    weather_fit: Optional[Union[str, List[str]]] = None,
-    top_k: int = 5,
-) -> list[dict]:
-    """語意檢索＋metadata 硬過濾。city/district/type/weather_fit 是精確條件，
-    query 是模糊偏好。city/district 一律「台→臺」正規化，跟 repository.py 同規則
-    （資料源存官方全名）。weather_fit 只有 attractions 有這個 metadata 欄位
-    （indoor_ok/outdoor_only/mixed/unknown，見 collector/attraction_classes.py），
-    傳list（如["indoor_ok","mixed"]）可以一次接受多個值，用 Chroma 的 $in。
-
-    完全相同的查詢參數會走 `_search_cached()` 的快取（見 ROADMAP.md Phase 4），
-    這裡先把 `weather_fit` 可能是list的情況轉成tuple——`functools.lru_cache`
-    要求所有參數可雜湊，list不行。"""
-    weather_fit_key = tuple(weather_fit) if isinstance(weather_fit, list) else weather_fit
-    return _search_cached(query, city, district, type_, weather_fit_key, top_k)
+# None當「還沒建過」的sentinel，跟「索引本身是空dict」分開——原本用`if not _doc_lookup`
+# 判斷，兩種狀態會混在一起，索引真的是空的話每次查詢都會白跑一次bm25_util.load()
+# (Codex複核抓到)。lock是防雙重初始化：多個request同時撞到第一次查詢時，若沒鎖，
+# 後到的thread可能在字典還沒建完就讀到不完整的lookup，漏掉一大批candidate id。
+_doc_lookup: Optional[Dict[str, Document]] = None
+_doc_lookup_lock = threading.Lock()
 
 
-@lru_cache(maxsize=512)
-def _search_cached(
-    query: str,
-    city: Optional[str],
-    district: Optional[str],
-    type_: Optional[str],
-    weather_fit_key,
-    top_k: int,
-) -> list[dict]:
-    """呼叫端不要直接呼叫這個，走上面的 `search()`——它負責把 `weather_fit`
-    正規化成可雜湊的key。快取回傳的是同一個list/dict物件，呼叫端不應該原地修改
-    回傳值（目前專案裡所有呼叫端都只讀不改，沒有這個問題）。"""
-    weather_fit = list(weather_fit_key) if isinstance(weather_fit_key, tuple) else weather_fit_key
-    where_clauses = []
-    if city:
-        where_clauses.append({"city": city.replace("台", "臺")})
-    if district:
-        where_clauses.append({"district": district.replace("台", "臺")})
-    if type_:
-        where_clauses.append({"type": type_})
-    if weather_fit:
-        if isinstance(weather_fit, str):
-            where_clauses.append({"weather_fit": weather_fit})
-        else:
-            where_clauses.append({"weather_fit": {"$in": list(weather_fit)}})
+def _get_doc_lookup() -> Dict[str, Document]:
+    global _doc_lookup
+    if _doc_lookup is None:
+        with _doc_lookup_lock:
+            if _doc_lookup is None:  # double-checked locking，避免每次查詢都搶鎖
+                idx = bm25_util.load()
+                ids, texts, metadatas = idx["ids"], idx["texts"], idx["metadatas"]
+                if not (len(ids) == len(texts) == len(metadatas)):
+                    raise RuntimeError(
+                        f"bm25索引裡ids/texts/metadatas長度不一致"
+                        f"(len={len(ids)}/{len(texts)}/{len(metadatas)})，"
+                        "索引檔可能壞掉，重跑collector/build_embeddings.py"
+                    )
+                lookup: Dict[str, Document] = {}
+                for doc_id, text, metadata in zip(ids, texts, metadatas):
+                    lookup[doc_id] = {"id": doc_id, "text": text, "metadata": metadata}
+                _doc_lookup = lookup
+    return _doc_lookup
 
-    where = None
-    if len(where_clauses) == 1:
-        where = where_clauses[0]
-    elif len(where_clauses) > 1:
-        where = {"$and": where_clauses}
 
-    collection = _get_collection()
-    result = collection.query(query_texts=[query], n_results=top_k, where=where)
+def clear_cache() -> None:
+    """重建索引後呼叫，把這層的doc lookup跟底下hybrid_search/bm25/collection的
+    快取一次清掉。"""
+    global _doc_lookup
+    _doc_lookup = None
+    hybrid_search.clear_cache()
 
-    hits = []
-    for id_, doc, meta, dist in zip(
-        result.get("ids", [[]])[0],
-        result.get("documents", [[]])[0],
-        result.get("metadatas", [[]])[0],
-        result.get("distances", [[]])[0],
-    ):
-        hits.append({"id": id_, "text": doc, "distance": dist, **meta})
-    return hits
+
+def query(user_query: str, top_k: int = TOP_K_FINAL) -> List[Document]:
+    """回傳rerank後Top-k筆文件(含text/metadata)，供agent組context用。"""
+    candidate_ids = hybrid_search.search(user_query)
+    lookup = _get_doc_lookup()
+    candidates = [lookup[cid] for cid in candidate_ids if cid in lookup]
+    if candidate_ids and not candidates:
+        # hybrid_search回傳了候選id，但doc lookup一筆都對不到——Chroma跟BM25
+        # 索引不同步的訊號，不是「剛好沒結果」，靜默回傳[]會誤導agent(Codex複核抓到)。
+        raise RuntimeError(
+            f"hybrid_search回傳{len(candidate_ids)}筆候選id，但doc lookup一筆都對不到，"
+            "Chroma/BM25索引可能不同步，重跑collector/build_embeddings.py"
+        )
+    if not candidates:
+        return []
+    texts = [c["text"] for c in candidates]
+    top_indices = reranker_fn.rerank_indices(user_query, texts, top_k=top_k)
+    return [candidates[i] for i in top_indices]
+
+
+def format_context(docs: List[Document]) -> str:
+    """把檢索到的文件轉成LLM可讀的context字串。"""
+    lines = []
+    for d in docs:
+        meta = d["metadata"]
+        loc = "、".join(p for p in [meta.get("city"), meta.get("district")] if p)
+        lines.append(f"[{meta.get('type', '')}] {d['text']}（{loc}）")
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    q = sys.argv[1] if len(sys.argv) > 1 else "台中室內景點"
+    results = query(q)
+    print(f"查詢：{q}")
+    print(format_context(results))

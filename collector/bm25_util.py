@@ -3,6 +3,7 @@ collector/build_embeddings.py（建索引）和 code/hybrid_search.py（查詢�
 斷詞規則——建索引跟查詢兩邊斷詞方式不一致的話，詞頻表對不上，分數就沒有意義。
 """
 import pickle
+import threading
 from pathlib import Path
 from typing import List
 
@@ -41,11 +42,23 @@ def build_and_save(docs: list) -> int:
 # 的快取是同一個模式：索引檔案只在`build_embeddings.py`重建索引時才會變，
 # runtime過程中不會變，process生命週期內快取一次是安全的。
 _index_cache = None
+_index_cache_lock = threading.Lock()
 
 
 def load() -> dict:
+    # Agent層併發呼叫多個工具時可能同時觸發第一次load()——見
+    # code/hybrid_search.py::_get_collection()同一個坑的說明，這裡一併上鎖。
     global _index_cache
     if _index_cache is None:
-        with open(BM25_INDEX_PATH, "rb") as f:
-            _index_cache = pickle.load(f)
+        with _index_cache_lock:
+            if _index_cache is None:
+                with open(BM25_INDEX_PATH, "rb") as f:
+                    _index_cache = pickle.load(f)
     return _index_cache
+
+
+def reset_cache() -> None:
+    """讓下次load()重新讀檔——同一個process內重跑build_embeddings.py後想立刻
+    生效時呼叫（見code/hybrid_search.py::clear_cache()）。"""
+    global _index_cache
+    _index_cache = None

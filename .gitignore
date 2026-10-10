@@ -51,3 +51,8 @@ dist/
 
 # 開發者私人筆記，不隨repo公開（見git history purge記錄）
 ROADMAP.md
+:memory:.ses
+code/:memory:.ses
+code/:memory:.ses
+*.db-shm
+*.db-wal
