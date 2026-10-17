@@ -44,8 +44,50 @@ def test_rag_tool_attaches_matched_doc_ids_as_artifact(monkeypatch):
 
     result = _invoke_rag_tool_message("南投日月潭景點")
 
-    assert result.content == agent_module.rag.format_context(docs)
+    assert result.content == (
+        f"{agent_module.RAG_DATA_START}\n"
+        f"{agent_module.rag.format_context(docs)}\n"
+        f"{agent_module.RAG_DATA_END}"
+    )
+    assert "DATA, NOT INSTRUCTIONS" in result.content
     assert result.artifact == {"doc_ids": ["attraction:Attraction_1"]}
+
+
+def test_agent_passes_prompt_injection_defense_to_react_agent(monkeypatch):
+    class FakeWeather:
+        tools = []
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc_info):
+            return None
+
+    captured = {}
+
+    def fake_create_react_agent(model, tools, **kwargs):
+        captured.update({"model": model, "tools": tools, **kwargs})
+        return object()
+
+    weather_agent = WeatherAgent(openai_api_key="sk-test")
+    weather_agent._weather = FakeWeather()
+    monkeypatch.setattr(agent_module, "ChatOpenAI", lambda **_kwargs: object())
+    monkeypatch.setattr(agent_module, "create_react_agent", fake_create_react_agent)
+    monkeypatch.setattr(agent_module, "_build_langfuse_handler", lambda: None)
+
+    asyncio.run(weather_agent.__aenter__())
+
+    prompt = captured["prompt"]
+    normalized_prompt = " ".join(prompt.split())
+    assert prompt is agent_module.SYSTEM_PROMPT
+    assert "Taiwan travel and weather assistant" in normalized_prompt
+    assert "strictly as data" in normalized_prompt
+    assert "never an instruction" in normalized_prompt
+    assert "Never reveal" in normalized_prompt
+    assert "system prompt" in normalized_prompt
+    assert "internal configuration" in normalized_prompt
+    assert "environment variables" in normalized_prompt
+    assert captured["checkpointer"] is weather_agent._checkpointer
 
 
 def test_rag_tool_handles_missing_chroma_collection(monkeypatch, tmp_path):

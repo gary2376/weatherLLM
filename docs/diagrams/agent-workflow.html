@@ -5195,7 +5195,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text x="1824.4" y="1395.0" class="t-security" font-size="27.4" font-weight="600">🔒 threading.Lock 併發保護</text>
 
         <!-- Edge paths -->
-        <path data-edge-from="cd_pipeline" data-edge-to="oracle_vm" data-edge-label="部署" data-edge-key="0" data-edge-id="cd-vm" data-composition-points="674.4,2116;674.4,2132;1134.8,2132;1134.8,2116" d="M 674.4 2116 L 674.4 2132 L 1134.8 2132 L 1134.8 2116" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="cd_pipeline" data-edge-to="oracle_vm" data-edge-label="尚未串接" data-edge-key="0" data-edge-id="cd-vm" data-composition-points="674.4,2116;674.4,2132;1134.8,2132;1134.8,2116" d="M 674.4 2116 L 674.4 2132 L 1134.8 2132 L 1134.8 2116" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="1" data-edge-id="ci-cd" data-composition-points="428,2046;484.4,2046" d="M 428 2046 L 484.4 2046" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="2" data-edge-id="guardrail-aborted" data-composition-points="1780.4,1094;1818.4,1094" d="M 1780.4 1094 L 1818.4 1094" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="guardrail" data-edge-to="rag_tool" data-edge-label="通過" data-edge-key="3" data-edge-id="guardrail-rag" data-composition-points="1590.4,1164;1590.4,1477;1818.4,1477" d="M 1590.4 1164 L 1590.4 1477 L 1818.4 1477" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
@@ -5206,7 +5206,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <path data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="8" data-edge-id="router-guardrail" data-composition-points="1400.4,909;1384.4,909;1384.4,1184;1590.4,1184;1590.4,1164" d="M 1400.4 909 L 1384.4 909 L 1384.4 1184 L 1590.4 1184 L 1590.4 1164" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="9" data-edge-id="router-planner-loop" data-composition-points="1590.4,839;1590.4,823;1134.8,823;1134.8,839" d="M 1590.4 839 L 1590.4 823 L 1134.8 823 L 1134.8 839" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="user" data-edge-to="webui" data-edge-key="10" data-edge-id="user-webui" data-composition-points="428,341;484.4,341" d="M 428 341 L 484.4 341" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="oracle_vm" data-edge-to="webui" data-edge-label="實際服務位置" data-edge-key="11" data-edge-id="vm-webui" data-composition-points="1324.8,2046;2665,2046;2665,341;864.4,341" d="M 1324.8 2046 L 2665 2046 L 2665 341 L 864.4 341" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="oracle_vm" data-edge-to="webui" data-edge-label="部署後的服務位置" data-edge-key="11" data-edge-id="vm-webui" data-composition-points="1324.8,2046;2665,2046;2665,341;864.4,341" d="M 1324.8 2046 L 2665 2046 L 2665 341 L 864.4 341" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="12" data-edge-id="weather-final" data-composition-points="2198.4,1662;2454.4,1662;2454.4,1547" d="M 2198.4 1662 L 2454.4 1662 L 2454.4 1547" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="webui" data-edge-to="planner" data-edge-label="送出查詢+Key" data-edge-key="13" data-edge-id="webui-planner" data-composition-points="864.4,334;1134.8,334;1134.8,839" d="M 864.4 334 L 1134.8 334 L 1134.8 839" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
 
@@ -5343,8 +5343,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="2454.4" y="1535" class="t-backend" font-size="19.6" text-anchor="middle">已驗證(真實多輪對話)</text>
         </g>
 
-        <g id="node-ci_pipeline" data-node-id="ci_pipeline" data-node-label="✅ CI Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CI Pipeline, pytest+build驗證, 部署管線(CI/CD，2026-10-07規劃) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="pytest+build驗證" data-node-tag="已寫好，未在GitHub觸發過" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 接收查詢">
-          <title>✅ CI Pipeline · pytest+build驗證 · 部署管線(CI/CD，2026-10-07規劃) › 接收查詢 · 已寫好，未在GitHub觸發過</title>
+        <g id="node-ci_pipeline" data-node-id="ci_pipeline" data-node-label="✅ CI Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CI Pipeline, pytest+build驗證, 部署管線(CI/CD，2026-10-07規劃) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="pytest+build驗證" data-node-tag="已在GitHub驗證通過" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 接收查詢">
+          <title>✅ CI Pipeline · pytest+build驗證 · 部署管線(CI/CD，2026-10-07規劃) › 接收查詢 · 已在GitHub驗證通過</title>
           <rect x="48" y="1976" width="380" height="140" rx="6" class="c-mask"/>
           <rect x="48" y="1976" width="380" height="140" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(54 1982) scale(0.6875)">
@@ -5352,37 +5352,37 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           </g>
           <text data-node-label="" data-detail-anchor="" x="238" y="2019.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">✅ CI Pipeline</text>
           <text data-detail="context" x="238" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">pytest+build驗證</text>
-        <text data-detail="fine" x="238" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">已寫好，未在GitHub觸發過</text>
+        <text data-detail="fine" x="238" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">已在GitHub驗證通過</text>
         </g>
 
-        <g id="node-cd_pipeline" data-node-id="cd_pipeline" data-node-label="🔲 CD Pipeline" tabindex="0" role="button" aria-label="Focus 🔲 CD Pipeline, 推GHCR→SSH部署, 部署管線(CI/CD，2026-10-07規劃) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="推GHCR→SSH部署" data-node-tag="規劃方向已定，待VM建好才能接" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 接收查詢">
-          <title>🔲 CD Pipeline · 推GHCR→SSH部署 · 部署管線(CI/CD，2026-10-07規劃) › 接收查詢 · 規劃方向已定，待VM建好才能接</title>
+        <g id="node-cd_pipeline" data-node-id="cd_pipeline" data-node-label="✅ CD Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CD Pipeline, build→推GHCR, 部署管線(CI/CD，2026-10-07規劃) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="build→推GHCR" data-node-tag="已驗證成功，不含部署步驟" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 接收查詢">
+          <title>✅ CD Pipeline · build→推GHCR · 部署管線(CI/CD，2026-10-07規劃) › 接收查詢 · 已驗證成功，不含部署步驟</title>
           <rect x="484.4" y="1976" width="380" height="140" rx="6" class="c-mask"/>
           <rect x="484.4" y="1976" width="380" height="140" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(490.4 1982) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="674.4" y="2019.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">🔲 CD Pipeline</text>
-          <text data-detail="context" x="674.4" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">推GHCR→SSH部署</text>
-        <text data-detail="fine" x="674.4" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">規劃方向已定，待VM建好才能接</text>
+          <text data-node-label="" data-detail-anchor="" x="674.4" y="2019.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">✅ CD Pipeline</text>
+          <text data-detail="context" x="674.4" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">build→推GHCR</text>
+        <text data-detail="fine" x="674.4" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">已驗證成功，不含部署步驟</text>
         </g>
 
-        <g id="node-oracle_vm" data-node-id="oracle_vm" data-node-label="🔲 Oracle Free VM" tabindex="0" role="button" aria-label="Focus 🔲 Oracle Free VM, docker compose up, 部署管線(CI/CD，2026-10-07規劃) › 推理+選工具" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="docker compose up" data-node-tag="待使用者確認後手把手建置" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 推理+選工具">
-          <title>🔲 Oracle Free VM · docker compose up · 部署管線(CI/CD，2026-10-07規劃) › 推理+選工具 · 待使用者確認後手把手建置</title>
+        <g id="node-oracle_vm" data-node-id="oracle_vm" data-node-label="🔲 Oracle Free VM" tabindex="0" role="button" aria-label="Focus 🔲 Oracle Free VM, 容量長期不足, 部署管線(CI/CD，2026-10-07規劃) › 推理+選工具" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="容量長期不足" data-node-tag="部署暫緩，背景重試中" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 推理+選工具">
+          <title>🔲 Oracle Free VM · 容量長期不足 · 部署管線(CI/CD，2026-10-07規劃) › 推理+選工具 · 部署暫緩，背景重試中</title>
           <rect x="944.8" y="1976" width="380" height="140" rx="6" class="c-mask"/>
           <rect x="944.8" y="1976" width="380" height="140" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(950.8 1982) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="1134.8" y="2019.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">🔲 Oracle Free VM</text>
-          <text data-detail="context" x="1134.8" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">docker compose up</text>
-        <text data-detail="fine" x="1134.8" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">待使用者確認後手把手建置</text>
+          <text data-detail="context" x="1134.8" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">容量長期不足</text>
+        <text data-detail="fine" x="1134.8" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">部署暫緩，背景重試中</text>
         </g>
 
         <!-- Edge labels -->
-        <g data-detail="context" data-edge-from="cd_pipeline" data-edge-to="oracle_vm" data-edge-label="部署" data-edge-key="0" data-edge-id="cd-vm">
-          <rect x="889.5999999999999" y="2112" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="904.5999999999999" y="2122" class="t-database" font-size="29.1" text-anchor="middle">部署</text>
+        <g data-detail="context" data-edge-from="cd_pipeline" data-edge-to="oracle_vm" data-edge-label="尚未串接" data-edge-key="0" data-edge-id="cd-vm">
+          <rect x="880.3999999999999" y="2112" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="904.5999999999999" y="2154.0" class="t-database" font-size="29.1" text-anchor="middle">尚未串接</text>
         </g>
         <g data-detail="context" data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="1" data-edge-id="ci-cd">
           <rect x="432" y="2026" width="48.4" height="14" rx="3" class="c-mask"/>
@@ -5415,9 +5415,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <text x="1362.6" y="813" class="t-database" font-size="29.1" text-anchor="middle">多輪工具調用</text>
         </g>
 
-        <g data-detail="context" data-edge-from="oracle_vm" data-edge-to="webui" data-edge-label="實際服務位置" data-edge-key="11" data-edge-id="vm-webui">
-          <rect x="1730.9" y="321" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="1764.7" y="331" class="t-database" font-size="29.1" text-anchor="middle">實際服務位置</text>
+        <g data-detail="context" data-edge-from="oracle_vm" data-edge-to="webui" data-edge-label="部署後的服務位置" data-edge-key="11" data-edge-id="vm-webui">
+          <rect x="1721.3" y="321" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="1764.7" y="331" class="t-database" font-size="29.1" text-anchor="middle">部署後的服務位置</text>
         </g>
         <g data-detail="context" data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="12" data-edge-id="weather-final">
           <rect x="2302.2000000000003" y="1642" width="48.4" height="14" rx="3" class="c-mask"/>
@@ -5649,16 +5649,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>✅ 已完成（RAG＋Agent＋Caching＋Web UI＋Docker，2026-10-07）</h3>
+          <h3>✅ 已完成（RAG＋Agent＋Caching＋Web UI＋Docker＋CICD，2026-10-17）</h3>
         </div>
         <ul>
           <li>&bull; RAG Tool：22縣市100%命中、Codex獨立複核修過7個真bug、Eval v1(壓力測試)+v2(唯一指向性，Context Recall 0.89)</li>
           <li>&bull; Agent核心迴圈：Planner/Router/Guardrail/RAG Tool/Weather Tool全部驗證——多輪對話指代消解成功、多需求單輪query正確拆成多個工具呼叫、guardrail正確擋下、天氣工具真實API呼叫成功</li>
+          <li>&bull; Prompt injection防護：system prompt定範圍+RAG內容加untrusted data邊界標記，真實瀏覽器送3種真實攻擊全部正確拒絕，詳見ARCHITECTURE.md第3節</li>
           <li>&bull; Caching：RAG(lru_cache)+天氣(TTL 45分鐘+併發去重複)全部完成，fastembed模型快取改專案內固定路徑(原本在系統temp目錄會被清掉)</li>
           <li>&bull; Web UI：Streamlit對話(固定高度捲動+輸入框釘住)＋地圖(pydeck，淺色底圖)並排顯示，對話命中的RAG地點用content_and_artifact機制回傳doc_ids，地圖以橘色光暈badge標示，多使用者OpenAI key隔離</li>
           <li>&bull; 全端錯誤處理防線：RAG storage失敗/Langfuse執行期斷線/MCP isError全部補防護，詳細清單見ARCHITECTURE.md第3節</li>
           <li>&bull; 2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest+兩支smoke test+真實三輪對話瀏覽器驗證全數通過</li>
           <li>&bull; 2026-10-07：Docker單一container(Dockerfile+docker-compose+fastembed build-time warmup)完成並真實驗證——本機裝colima補齊Docker環境，`docker compose up`起container後用真實多輪對話(RAG+真實CWA天氣查詢)驗證容器內cwa-mcp-server subprocess、RAG資料掛載、OpenAI呼叫全部正常，過程中抓到colima預設看不到外接磁碟導致bind mount變空目錄的真bug並修正</li>
+          <li>&bull; 2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過，跟有沒有活著的部署目標完全無關；SSH部署步驟因為沒有可驗證的host，刻意不寫不提</li>
         </ul>
       </div>
 
@@ -5669,8 +5671,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>&bull; Token-level streaming刻意排除在目前範圍外(需重構ask()內部guardrail邏輯，待之後評估)</li>
-          <li>&bull; 公開部署：已選定Oracle Cloud Always Free VM(可沿用現有docker-compose)，使用者要求之後手把手引導建置，目前尚未動手</li>
-          <li>&bull; CICD(確認做CI+CD全自動)：CI workflow(pytest+docker build驗證)已寫好但還沒在GitHub上觸發過；CD(build→推GHCR→SSH部署到VM)規劃方向已定，需VM建好才能接；測試範圍(smoke test要不要進CI、部署後資料真實性驗證、靜態分析)待決定，詳見ARCHITECTURE.md第6節</li>
+          <li>&bull; 公開部署暫緩：Oracle A1.Flex容量長期搶不到(背景重試腳本持續跑，400+次未成功)，E2.1.Micro記憶體不夠會讓VM當機，HF Spaces Docker SDK變付費，Render RAM更少，免費選項全部卡關，詳見ARCHITECTURE.md第6節</li>
+          <li>&bull; CD的SSH部署步驟：刻意不寫/不提，沒有可用host端到端驗證就不算完成，等真的搶到部署目標再補</li>
         </ul>
       </div>
 
