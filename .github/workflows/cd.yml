@@ -8,9 +8,33 @@ permissions:
   contents: read
   packages: write
 
+# Codex獨立複核抓到的兩個真缺口：(1)原本CD是獨立workflow，不等CI的pytest
+# 通過就能build+push，萬一master上某個commit測試壞掉但Docker build剛好
+# 能過，壞版本照樣會被發布；(2)沒有concurrency控制，連續兩次push到master
+# 可能讓先推的那個run比較晚跑完，把latest tag蓋回舊版本。修法：把pytest
+# 當成這個workflow自己的前置job(不跨workflow用workflow_run，避免trigger
+# ref處理的額外複雜度)，build-and-push用needs等它通過；concurrency group
+# 綁ref、cancel-in-progress，同一個ref的新push直接取消還在跑的舊run。
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+        working-directory: code
+
   build-and-push:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
 
