@@ -59,7 +59,7 @@ A：執行期(不只初始化)包try/except，斷線就停用trace、拿掉callb
 
 ---
 
-## Web UI/多使用者部署
+## Web UI/多使用者
 
 **Q：Web服務讓多個使用者各自輸入自己的API key，會不會互相洩漏？**
 A：原本`WeatherAgent`直接吃process環境變數的`OPENAI_API_KEY`，但Streamlit是多使用者共用同一個process，若把使用者輸入的key寫進環境變數，會洩漏給其他並發session用。解法：建構子加`openai_api_key`可選參數，有傳才覆寫`ChatOpenAI(api_key=...)`，key全程只存在該使用者自己的`session_state`，不落地、不寫log、不進Langfuse trace。
@@ -78,7 +78,7 @@ A：checkpointer回傳的`messages`是**累積的整個thread歷史**，不是�
 
 ---
 
-## Docker/部署
+## Docker
 
 **Q：為什麼是單一container，不是每個服務(Streamlit/天氣工具)各自一個container？**
 A：`cwa-mcp-server`不是獨立網路服務，是透過stdio(標準輸入輸出)跟Agent通訊的本地子程序(`code/mcp_tools.py`裡`StdioServerParameters`+`stdio_client`)，本質上是同一個Python process呼叫的一支CLI工具，不是要跨網路呼叫的microservice。拆成兩個container反而要多繞一層網路(TCP/socket)去模擬原本就是本地subprocess呼叫的東西，是不必要的複雜度——先判斷「這兩個東西的溝通方式是什麼」，再決定要不要拆，不是看到兩個功能就預設該拆成兩個service。
@@ -89,10 +89,10 @@ A：`CWA_MCP_SERVER_COMMAND = Path(sys.exec_prefix) / "bin" / "cwa-mcp-server"`�
 **Q：Docker image裡，什麼東西該在build time烤進image、什麼東西該用volume掛載？怎麼判斷？**
 A：判斷依據是「這份資料誰會改、多久改一次」。fastembed的兩個模型(embedding+reranker)只在套件版本更新時才會變，而且每次container啟動都要重新連外網下載會拖慢啟動、也讓runtime多一個對外部網路的依賴，所以選擇在image build階段跑一次`warmup_fastembed.py`預先下載，直接烤進image layer。相對地，`Data/`裡的`chroma`索引、`travel.db`、`bm25_index.pkl`是跑`collector/build_embeddings.py`之類的腳本重建資料後就會變的東西，選volume掛載，這樣重新跑collector更新資料後，不需要重新build整個image才能讓container讀到新資料。這兩種資料的「變動頻率」不同，資料生命週期管理策略也該跟著不同，不是整包全部bake進image圖方便，也不是整包全部volume掛載圖彈性。
 
-**Q：公開部署時，使用者自己的OpenAI key、跟操作者自己的CWA/Langfuse key，為什麼用不同方式注入？**
+**Q：多個使用者共用服務時，使用者自己的OpenAI key、跟操作者自己的CWA/Langfuse key，為什麼用不同方式注入？**
 A：`OPENAI_API_KEY`完全不進容器設定(不寫docker-compose、不寫env_file)，因為這是每個訪客自己要輸入的錢包——如果放進容器環境變數，變成操作者一個人的key要幫所有訪客的LLM呼叫買單，而且Streamlit是多使用者共用一個process，環境變數也沒辦法依訪客分流(這個設計決策在Web UI章節本來就定案過，Docker化只是沒有打破它)。`CWA_API_KEY`/`LANGFUSE_*`則是操作者自己申請、免費額度就夠portfolio demo流量用的key，風險屬於「操作者自己的成本」而非「訪客互相洩漏」，所以可以安心走docker-compose的`env_file`，整個容器共用一份即可。
 
-**Q：Docker容器啟動成功、health check也過，就代表部署正確嗎？**
+**Q：Docker容器啟動成功、health check也過，就代表設定正確嗎？**
 A：不一定——驗證時真的撞到一個「容器健康但資料是空的」案例。開發機原本沒裝Docker，裝`colima`(mac上headless、CLI-only的Docker runtime)補上後，第一次`docker compose up`容器確實正常啟動、health check也顯示healthy，但實際查詢RAG完全查不到資料。追查發現colima的VM預設只mount `$HOME`，看不到專案放在外接磁碟的路徑；docker-compose對單一檔案的bind mount(`travel.db`等)在VM端找不到來源檔案時，不會報錯，而是靜默建一個空目錄頂替，SQLite對空檔案一樣能正常connect，只是查不到任何資料。這種失敗模式不會讓container crash、不會讓health check失敗，純粹測「服務有沒有啟動」完全抓不到。教訓跟MemorySaver那次（見上面）同一個類型：**「看起來沒出錯」不等於「資料是對的」**，任何牽涉外部資料掛載/注入的環境（volume、secret、config injection），上線前都要用一次會真正讀到資料的功能性查詢去驗證，不能只看服務存活狀態。
 
 ---

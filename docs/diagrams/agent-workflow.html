@@ -5093,7 +5093,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <div class="pulse-dot"></div>
         <h1>weatherLLM Agent 請求流程</h1>
       </div>
-      <p class="subtitle">進度快照（2026-10-07）：RAG＋Agent＋Caching＋Web UI＋Docker全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復；下一步是公開部署(Oracle VM)＋CICD</p>
+      <p class="subtitle">進度快照（2026-11-05）：RAG＋Agent＋Caching＋Web UI＋Docker＋CICD全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復＋prompt injection防護；專案範圍止於本機Docker＋CI/CD(推GHCR)，不做公開部署</p>
     </div>
 
     <script id="archify-guided-views-data" type="application/json">[]</script>
@@ -5141,9 +5141,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / PLATE 04">
-      <svg viewBox="0 0 2681 2429" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
+      <svg viewBox="0 0 2669 2429" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
         <title id="archify-diagram-title">weatherLLM Agent 請求流程</title>
-        <desc id="archify-diagram-description">進度快照（2026-10-07）：RAG＋Agent＋Caching＋Web UI＋Docker全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復；下一步是公開部署(Oracle VM)＋CICD</desc>
+        <desc id="archify-diagram-description">進度快照（2026-11-05）：RAG＋Agent＋Caching＋Web UI＋Docker＋CICD全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復＋prompt injection防護；專案範圍止於本機Docker＋CI/CD(推GHCR)，不做公開部署</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -5177,7 +5177,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text x="54" y="1210" class="t-dim" font-size="28.0" font-weight="600">03 / 工具執行與紀錄</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-3" x="40" y="1757" width="2613" height="548" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="1779" class="t-dim" font-size="28.0" font-weight="600">04 / 部署管線(CI/CD，2026-10-07規劃)</text>
+        <text x="54" y="1779" class="t-dim" font-size="28.0" font-weight="600">04 / CI/CD管線(GitHub Actions)</text>
 
         <!-- Phase headers -->
         <line x1="192" y1="35" x2="720.4" y2="35" class="a-default" stroke-width="1.1"/>
@@ -5195,20 +5195,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text x="1824.4" y="1395.0" class="t-security" font-size="27.4" font-weight="600">🔒 threading.Lock 併發保護</text>
 
         <!-- Edge paths -->
-        <path data-edge-from="cd_pipeline" data-edge-to="oracle_vm" data-edge-label="尚未串接" data-edge-key="0" data-edge-id="cd-vm" data-composition-points="674.4,2116;674.4,2132;1134.8,2132;1134.8,2116" d="M 674.4 2116 L 674.4 2132 L 1134.8 2132 L 1134.8 2116" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="1" data-edge-id="ci-cd" data-composition-points="428,2046;484.4,2046" d="M 428 2046 L 484.4 2046" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="2" data-edge-id="guardrail-aborted" data-composition-points="1780.4,1094;1818.4,1094" d="M 1780.4 1094 L 1818.4 1094" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="guardrail" data-edge-to="rag_tool" data-edge-label="通過" data-edge-key="3" data-edge-id="guardrail-rag" data-composition-points="1590.4,1164;1590.4,1477;1818.4,1477" d="M 1590.4 1164 L 1590.4 1477 L 1818.4 1477" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="guardrail" data-edge-to="weather_tool" data-edge-key="4" data-edge-id="guardrail-weather" data-composition-points="1604.4,1164;1604.4,1662;1818.4,1662" d="M 1604.4 1164 L 1604.4 1662 L 1818.4 1662" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="planner" data-edge-to="router" data-edge-key="5" data-edge-id="planner-router" data-composition-points="1324.8,902;1400.4,902" d="M 1324.8 902 L 1400.4 902" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="planner" data-edge-to="trace" data-edge-label="記錄步驟+中斷" data-edge-key="6" data-edge-id="planner-trace" data-composition-points="944.8,909;864.4,909" d="M 944.8 909 L 864.4 909" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="rag_tool" data-edge-to="final" data-edge-label="整理成答案" data-edge-key="7" data-edge-id="rag-final" data-composition-points="2008.4,1547;2008.4,1563;2454.4,1563;2454.4,1547" d="M 2008.4 1547 L 2008.4 1563 L 2454.4 1563 L 2454.4 1547" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="8" data-edge-id="router-guardrail" data-composition-points="1400.4,909;1384.4,909;1384.4,1184;1590.4,1184;1590.4,1164" d="M 1400.4 909 L 1384.4 909 L 1384.4 1184 L 1590.4 1184 L 1590.4 1164" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="9" data-edge-id="router-planner-loop" data-composition-points="1590.4,839;1590.4,823;1134.8,823;1134.8,839" d="M 1590.4 839 L 1590.4 823 L 1134.8 823 L 1134.8 839" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="user" data-edge-to="webui" data-edge-key="10" data-edge-id="user-webui" data-composition-points="428,341;484.4,341" d="M 428 341 L 484.4 341" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="oracle_vm" data-edge-to="webui" data-edge-label="部署後的服務位置" data-edge-key="11" data-edge-id="vm-webui" data-composition-points="1324.8,2046;2665,2046;2665,341;864.4,341" d="M 1324.8 2046 L 2665 2046 L 2665 341 L 864.4 341" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="12" data-edge-id="weather-final" data-composition-points="2198.4,1662;2454.4,1662;2454.4,1547" d="M 2198.4 1662 L 2454.4 1662 L 2454.4 1547" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="webui" data-edge-to="planner" data-edge-label="送出查詢+Key" data-edge-key="13" data-edge-id="webui-planner" data-composition-points="864.4,334;1134.8,334;1134.8,839" d="M 864.4 334 L 1134.8 334 L 1134.8 839" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="0" data-edge-id="ci-cd" data-composition-points="428,2046;484.4,2046" d="M 428 2046 L 484.4 2046" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="1" data-edge-id="guardrail-aborted" data-composition-points="1780.4,1094;1818.4,1094" d="M 1780.4 1094 L 1818.4 1094" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="guardrail" data-edge-to="rag_tool" data-edge-label="通過" data-edge-key="2" data-edge-id="guardrail-rag" data-composition-points="1590.4,1164;1590.4,1477;1818.4,1477" d="M 1590.4 1164 L 1590.4 1477 L 1818.4 1477" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="guardrail" data-edge-to="weather_tool" data-edge-key="3" data-edge-id="guardrail-weather" data-composition-points="1604.4,1164;1604.4,1662;1818.4,1662" d="M 1604.4 1164 L 1604.4 1662 L 1818.4 1662" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="planner" data-edge-to="router" data-edge-key="4" data-edge-id="planner-router" data-composition-points="1324.8,902;1400.4,902" d="M 1324.8 902 L 1400.4 902" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="planner" data-edge-to="trace" data-edge-label="記錄步驟+中斷" data-edge-key="5" data-edge-id="planner-trace" data-composition-points="944.8,909;864.4,909" d="M 944.8 909 L 864.4 909" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="rag_tool" data-edge-to="final" data-edge-label="整理成答案" data-edge-key="6" data-edge-id="rag-final" data-composition-points="2008.4,1547;2008.4,1563;2454.4,1563;2454.4,1547" d="M 2008.4 1547 L 2008.4 1563 L 2454.4 1563 L 2454.4 1547" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="7" data-edge-id="router-guardrail" data-composition-points="1400.4,909;1384.4,909;1384.4,1184;1590.4,1184;1590.4,1164" d="M 1400.4 909 L 1384.4 909 L 1384.4 1184 L 1590.4 1184 L 1590.4 1164" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="8" data-edge-id="router-planner-loop" data-composition-points="1590.4,839;1590.4,823;1134.8,823;1134.8,839" d="M 1590.4 839 L 1590.4 823 L 1134.8 823 L 1134.8 839" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="user" data-edge-to="webui" data-edge-key="9" data-edge-id="user-webui" data-composition-points="428,341;484.4,341" d="M 428 341 L 484.4 341" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="10" data-edge-id="weather-final" data-composition-points="2198.4,1662;2454.4,1662;2454.4,1547" d="M 2198.4 1662 L 2454.4 1662 L 2454.4 1547" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="webui" data-edge-to="planner" data-edge-label="送出查詢+Key" data-edge-key="11" data-edge-id="webui-planner" data-composition-points="864.4,341;1134.8,341;1134.8,839" d="M 864.4 341 L 1134.8 341 L 1134.8 839" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
 
         <!-- Nodes -->
         <g id="node-user" data-node-id="user" data-node-label="使用者" tabindex="0" role="button" aria-label="Focus 使用者, 輸入查詢+OpenAI Key, 使用者介面 › 接收查詢" aria-pressed="false" data-node-kind="external" data-node-sublabel="輸入查詢+OpenAI Key" data-node-context="使用者介面 › 接收查詢">
@@ -5343,8 +5341,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="2454.4" y="1535" class="t-backend" font-size="19.6" text-anchor="middle">已驗證(真實多輪對話)</text>
         </g>
 
-        <g id="node-ci_pipeline" data-node-id="ci_pipeline" data-node-label="✅ CI Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CI Pipeline, pytest+build驗證, 部署管線(CI/CD，2026-10-07規劃) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="pytest+build驗證" data-node-tag="已在GitHub驗證通過" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 接收查詢">
-          <title>✅ CI Pipeline · pytest+build驗證 · 部署管線(CI/CD，2026-10-07規劃) › 接收查詢 · 已在GitHub驗證通過</title>
+        <g id="node-ci_pipeline" data-node-id="ci_pipeline" data-node-label="✅ CI Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CI Pipeline, pytest+build驗證, CI/CD管線(GitHub Actions) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="pytest+build驗證" data-node-tag="已在GitHub驗證通過" data-node-context="CI/CD管線(GitHub Actions) › 接收查詢">
+          <title>✅ CI Pipeline · pytest+build驗證 · CI/CD管線(GitHub Actions) › 接收查詢 · 已在GitHub驗證通過</title>
           <rect x="48" y="1976" width="380" height="140" rx="6" class="c-mask"/>
           <rect x="48" y="1976" width="380" height="140" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(54 1982) scale(0.6875)">
@@ -5355,8 +5353,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="238" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">已在GitHub驗證通過</text>
         </g>
 
-        <g id="node-cd_pipeline" data-node-id="cd_pipeline" data-node-label="✅ CD Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CD Pipeline, build→推GHCR, 部署管線(CI/CD，2026-10-07規劃) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="build→推GHCR" data-node-tag="已驗證成功，不含部署步驟" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 接收查詢">
-          <title>✅ CD Pipeline · build→推GHCR · 部署管線(CI/CD，2026-10-07規劃) › 接收查詢 · 已驗證成功，不含部署步驟</title>
+        <g id="node-cd_pipeline" data-node-id="cd_pipeline" data-node-label="✅ CD Pipeline" tabindex="0" role="button" aria-label="Focus ✅ CD Pipeline, build→推GHCR, CI/CD管線(GitHub Actions) › 接收查詢" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="build→推GHCR" data-node-tag="已驗證成功，推到GHCR為止" data-node-context="CI/CD管線(GitHub Actions) › 接收查詢">
+          <title>✅ CD Pipeline · build→推GHCR · CI/CD管線(GitHub Actions) › 接收查詢 · 已驗證成功，推到GHCR為止</title>
           <rect x="484.4" y="1976" width="380" height="140" rx="6" class="c-mask"/>
           <rect x="484.4" y="1976" width="380" height="140" rx="6" class="c-cloud" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(490.4 1982) scale(0.6875)">
@@ -5364,68 +5362,48 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           </g>
           <text data-node-label="" data-detail-anchor="" x="674.4" y="2019.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">✅ CD Pipeline</text>
           <text data-detail="context" x="674.4" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">build→推GHCR</text>
-        <text data-detail="fine" x="674.4" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">已驗證成功，不含部署步驟</text>
-        </g>
-
-        <g id="node-oracle_vm" data-node-id="oracle_vm" data-node-label="🔲 Oracle Free VM" tabindex="0" role="button" aria-label="Focus 🔲 Oracle Free VM, 容量長期不足, 部署管線(CI/CD，2026-10-07規劃) › 推理+選工具" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="容量長期不足" data-node-tag="部署暫緩，背景重試中" data-node-context="部署管線(CI/CD，2026-10-07規劃) › 推理+選工具">
-          <title>🔲 Oracle Free VM · 容量長期不足 · 部署管線(CI/CD，2026-10-07規劃) › 推理+選工具 · 部署暫緩，背景重試中</title>
-          <rect x="944.8" y="1976" width="380" height="140" rx="6" class="c-mask"/>
-          <rect x="944.8" y="1976" width="380" height="140" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(950.8 1982) scale(0.6875)">
-            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1134.8" y="2019.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">🔲 Oracle Free VM</text>
-          <text data-detail="context" x="1134.8" y="2057.0" class="t-muted" font-size="22.4" text-anchor="middle">容量長期不足</text>
-        <text data-detail="fine" x="1134.8" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">部署暫緩，背景重試中</text>
+        <text data-detail="fine" x="674.4" y="2104" class="t-cloud" font-size="19.6" text-anchor="middle">已驗證成功，推到GHCR為止</text>
         </g>
 
         <!-- Edge labels -->
-        <g data-detail="context" data-edge-from="cd_pipeline" data-edge-to="oracle_vm" data-edge-label="尚未串接" data-edge-key="0" data-edge-id="cd-vm">
-          <rect x="880.3999999999999" y="2112" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="904.5999999999999" y="2154.0" class="t-database" font-size="29.1" text-anchor="middle">尚未串接</text>
-        </g>
-        <g data-detail="context" data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="1" data-edge-id="ci-cd">
+        <g data-detail="context" data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="0" data-edge-id="ci-cd">
           <rect x="432" y="2026" width="48.4" height="14" rx="3" class="c-mask"/>
           <text x="456.2" y="1956.0" class="t-database" font-size="29.1" text-anchor="middle">測試通過</text>
         </g>
-        <g data-detail="context" data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="2" data-edge-id="guardrail-aborted">
+        <g data-detail="context" data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="1" data-edge-id="guardrail-aborted">
           <rect x="1784.4" y="1074" width="30" height="14" rx="3" class="c-mask"/>
           <text x="1799.4" y="1011.0" class="t-security" font-size="29.1" text-anchor="middle">超標</text>
         </g>
-        <g data-detail="context" data-edge-from="guardrail" data-edge-to="rag_tool" data-edge-label="通過" data-edge-key="3" data-edge-id="guardrail-rag">
+        <g data-detail="context" data-edge-from="guardrail" data-edge-to="rag_tool" data-edge-label="通過" data-edge-key="2" data-edge-id="guardrail-rag">
           <rect x="1689.4" y="1457" width="30" height="14" rx="3" class="c-mask"/>
           <text x="1704.4" y="1467" class="t-backend" font-size="29.1" text-anchor="middle">通過</text>
         </g>
 
 
-        <g data-detail="context" data-edge-from="planner" data-edge-to="trace" data-edge-label="記錄步驟+中斷" data-edge-key="6" data-edge-id="planner-trace">
+        <g data-detail="context" data-edge-from="planner" data-edge-to="trace" data-edge-label="記錄步驟+中斷" data-edge-key="5" data-edge-id="planner-trace">
           <rect x="868.3999999999999" y="889" width="72.4" height="14" rx="3" class="c-mask"/>
           <text x="904.5999999999999" y="819.0" class="t-database" font-size="29.1" text-anchor="middle">記錄步驟+中斷</text>
         </g>
-        <g data-detail="context" data-edge-from="rag_tool" data-edge-to="final" data-edge-label="整理成答案" data-edge-key="7" data-edge-id="rag-final">
+        <g data-detail="context" data-edge-from="rag_tool" data-edge-to="final" data-edge-label="整理成答案" data-edge-key="6" data-edge-id="rag-final">
           <rect x="2202.4" y="1543" width="58" height="14" rx="3" class="c-mask"/>
           <text x="2231.4" y="1579.0" class="t-backend" font-size="29.1" text-anchor="middle">整理成答案</text>
         </g>
-        <g data-detail="context" data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="8" data-edge-id="router-guardrail">
+        <g data-detail="context" data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="7" data-edge-id="router-guardrail">
           <rect x="1448.8000000000002" y="1164" width="77.2" height="14" rx="3" class="c-mask"/>
           <text x="1487.4" y="1202.0" class="t-security" font-size="29.1" text-anchor="middle">呼叫工具前檢查</text>
         </g>
-        <g data-detail="context" data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="9" data-edge-id="router-planner-loop">
+        <g data-detail="context" data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="8" data-edge-id="router-planner-loop">
           <rect x="1328.8" y="803" width="67.6" height="14" rx="3" class="c-mask"/>
           <text x="1362.6" y="813" class="t-database" font-size="29.1" text-anchor="middle">多輪工具調用</text>
         </g>
 
-        <g data-detail="context" data-edge-from="oracle_vm" data-edge-to="webui" data-edge-label="部署後的服務位置" data-edge-key="11" data-edge-id="vm-webui">
-          <rect x="1721.3" y="321" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="1764.7" y="331" class="t-database" font-size="29.1" text-anchor="middle">部署後的服務位置</text>
-        </g>
-        <g data-detail="context" data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="12" data-edge-id="weather-final">
+        <g data-detail="context" data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="10" data-edge-id="weather-final">
           <rect x="2302.2000000000003" y="1642" width="48.4" height="14" rx="3" class="c-mask"/>
           <text x="2326.4" y="1652" class="t-database" font-size="29.1" text-anchor="middle">併入回答</text>
         </g>
-        <g data-detail="context" data-edge-from="webui" data-edge-to="planner" data-edge-label="送出查詢+Key" data-edge-key="13" data-edge-id="webui-planner">
-          <rect x="965.8" y="314" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="999.5999999999999" y="324" class="t-backend" font-size="29.1" text-anchor="middle">送出查詢+Key</text>
+        <g data-detail="context" data-edge-from="webui" data-edge-to="planner" data-edge-label="送出查詢+Key" data-edge-key="11" data-edge-id="webui-planner">
+          <rect x="965.8" y="321" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="999.5999999999999" y="331" class="t-backend" font-size="29.1" text-anchor="middle">送出查詢+Key</text>
         </g>
 
         <!-- Legend -->
@@ -5660,7 +5638,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <li>&bull; 全端錯誤處理防線：RAG storage失敗/Langfuse執行期斷線/MCP isError全部補防護，詳細清單見ARCHITECTURE.md第3節</li>
           <li>&bull; 2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest+兩支smoke test+真實三輪對話瀏覽器驗證全數通過</li>
           <li>&bull; 2026-10-07：Docker單一container(Dockerfile+docker-compose+fastembed build-time warmup)完成並真實驗證——本機裝colima補齊Docker環境，`docker compose up`起container後用真實多輪對話(RAG+真實CWA天氣查詢)驗證容器內cwa-mcp-server subprocess、RAG資料掛載、OpenAI呼叫全部正常，過程中抓到colima預設看不到外接磁碟導致bind mount變空目錄的真bug並修正</li>
-          <li>&bull; 2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過，跟有沒有活著的部署目標完全無關；SSH部署步驟因為沒有可驗證的host，刻意不寫不提</li>
+          <li>&bull; 2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過</li>
         </ul>
       </div>
 
@@ -5671,8 +5649,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>&bull; Token-level streaming刻意排除在目前範圍外(需重構ask()內部guardrail邏輯，待之後評估)</li>
-          <li>&bull; 公開部署暫緩：Oracle A1.Flex容量長期搶不到(背景重試腳本持續跑，400+次未成功)，E2.1.Micro記憶體不夠會讓VM當機，HF Spaces Docker SDK變付費，Render RAM更少，免費選項全部卡關，詳見ARCHITECTURE.md第6節</li>
-          <li>&bull; CD的SSH部署步驟：刻意不寫/不提，沒有可用host端到端驗證就不算完成，等真的搶到部署目標再補</li>
+          <li>&bull; 公開部署：2026-11-05決定不做，專案範圍止於本機Docker＋CI/CD(推GHCR)</li>
         </ul>
       </div>
 

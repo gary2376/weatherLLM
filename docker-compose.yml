@@ -1,8 +1,7 @@
 services:
   app:
-    # image跟build並存：本機/CI用build:現場組image；未來真的有VM時，VM上只
-    # 跑`docker compose pull && up -d`，靠這個image名稱拉CD推上去的GHCR image，
-    # 不用在VM上重新build，同一份compose檔兩種用法都撐得住。
+    # image跟build並存：本機用build:現場組image；`docker compose pull`則靠這個
+    # image名稱拉CD推上GHCR的版本，同一份compose檔兩種用法都撐得住。
     image: ghcr.io/gary2376/weatherllm:latest
     build:
       context: .

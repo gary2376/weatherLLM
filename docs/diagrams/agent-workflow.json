@@ -3,7 +3,7 @@
   "diagram_type": "workflow",
   "meta": {
     "title": "weatherLLM Agent 請求流程",
-    "subtitle": "進度快照（2026-10-07）：RAG＋Agent＋Caching＋Web UI＋Docker全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復；下一步是公開部署(Oracle VM)＋CICD",
+    "subtitle": "進度快照（2026-11-05）：RAG＋Agent＋Caching＋Web UI＋Docker＋CICD全部完成並驗證，含全端錯誤處理防線＋多輪對話歷史隔離修復＋prompt injection防護；專案範圍止於本機Docker＋CI/CD(推GHCR)，不做公開部署",
     "quality_profile": "standard"
   },
   "lanes": [
@@ -21,7 +21,7 @@
     },
     {
       "id": "deploy",
-      "label": "部署管線(CI/CD，2026-10-07規劃)"
+      "label": "CI/CD管線(GitHub Actions)"
     }
   ],
   "phases": [
@@ -196,18 +196,7 @@
       "type": "cloud",
       "label": "✅ CD Pipeline",
       "sublabel": "build→推GHCR",
-      "tag": "已驗證成功，不含部署步驟",
-      "width": 380,
-      "height": 140
-    },
-    {
-      "id": "oracle_vm",
-      "lane": "deploy",
-      "col": 2,
-      "type": "cloud",
-      "label": "🔲 Oracle Free VM",
-      "sublabel": "容量長期不足",
-      "tag": "部署暫緩，背景重試中",
+      "tag": "已驗證成功，推到GHCR為止",
       "width": 380,
       "height": 140
     }
@@ -309,23 +298,6 @@
       "label": "測試通過",
       "variant": "dashed",
       "width": 2.5
-    },
-    {
-      "id": "cd-vm",
-      "from": "cd_pipeline",
-      "to": "oracle_vm",
-      "label": "尚未串接",
-      "variant": "dashed",
-      "width": 2.5
-    },
-    {
-      "id": "vm-webui",
-      "from": "oracle_vm",
-      "to": "webui",
-      "label": "部署後的服務位置",
-      "variant": "dashed",
-      "role": "return",
-      "width": 2.5
     }
   ],
   "cards": [
@@ -341,7 +313,7 @@
         "全端錯誤處理防線：RAG storage失敗/Langfuse執行期斷線/MCP isError全部補防護，詳細清單見ARCHITECTURE.md第3節",
         "2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest+兩支smoke test+真實三輪對話瀏覽器驗證全數通過",
         "2026-10-07：Docker單一container(Dockerfile+docker-compose+fastembed build-time warmup)完成並真實驗證——本機裝colima補齊Docker環境，`docker compose up`起container後用真實多輪對話(RAG+真實CWA天氣查詢)驗證容器內cwa-mcp-server subprocess、RAG資料掛載、OpenAI呼叫全部正常，過程中抓到colima預設看不到外接磁碟導致bind mount變空目錄的真bug並修正",
-        "2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過，跟有沒有活著的部署目標完全無關；SSH部署步驟因為沒有可驗證的host，刻意不寫不提"
+        "2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過"
       ]
     },
     {
@@ -349,8 +321,7 @@
       "title": "🔲 尚未開始",
       "items": [
         "Token-level streaming刻意排除在目前範圍外(需重構ask()內部guardrail邏輯，待之後評估)",
-        "公開部署暫緩：Oracle A1.Flex容量長期搶不到(背景重試腳本持續跑，400+次未成功)，E2.1.Micro記憶體不夠會讓VM當機，HF Spaces Docker SDK變付費，Render RAM更少，免費選項全部卡關，詳見ARCHITECTURE.md第6節",
-        "CD的SSH部署步驟：刻意不寫/不提，沒有可用host端到端驗證就不算完成，等真的搶到部署目標再補"
+        "公開部署：2026-11-05決定不做，專案範圍止於本機Docker＋CI/CD(推GHCR)"
       ]
     },
     {
