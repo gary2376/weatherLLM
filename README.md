@@ -101,6 +101,10 @@ docker compose pull             # 或拉 CD 推到 GHCR 的 image（ghcr.io/gary
 
 重點：image 裡**沒有** `Data/`；`docker-compose.yml` 會把主機的 `Data/chroma`、`Data/travel.db`、`Data/bm25_index.pkl` 掛進 container，所以**要先在主機完成上面第 3 步**。這三個路徑在主機上不存在時，Docker 會建出空目錄頂替，container 看起來正常、查詢卻查不到資料。在 Mac 用 colima 時，專案若放在外接磁碟，需 `colima start --mount /Volumes/<磁碟名>:w`。細節見 `docs/ARCHITECTURE.md` 第 6 節。
 
+## 授權
+
+程式碼以 [MIT License](LICENSE) 授權。旅遊與交通**資料**（觀光署、TDX）不隨 repo 散布，由使用者自行用 collector 取得，各自的授權與顯名要求見 [`DATA_LICENSE.md`](DATA_LICENSE.md)。
+
 ## 文件地圖
 
 | 想了解 | 讀這個 |
