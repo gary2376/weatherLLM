@@ -116,7 +116,7 @@
       "type": "security",
       "label": "✅ Guardrail",
       "sublabel": "limit=10 / cost cap",
-      "tag": "已驗證(超額測試)",
+      "tag": "示意位置，實作見ARCH 8.5",
       "width": 380,
       "height": 140,
       "yOffset": 185
@@ -228,7 +228,7 @@
       "id": "router-guardrail",
       "from": "router",
       "to": "guardrail",
-      "label": "呼叫工具前檢查",
+      "label": "步數/成本上限",
       "variant": "security",
       "width": 2.5
     },
@@ -295,7 +295,7 @@
       "id": "ci-cd",
       "from": "ci_pipeline",
       "to": "cd_pipeline",
-      "label": "測試通過",
+      "label": "各自觸發",
       "variant": "dashed",
       "width": 2.5
     }
@@ -311,7 +311,7 @@
         "Caching：RAG(lru_cache)+天氣(TTL 45分鐘+併發去重複)全部完成，fastembed模型快取改專案內固定路徑(原本在系統temp目錄會被清掉)",
         "Web UI：Streamlit對話(固定高度捲動+輸入框釘住)＋地圖(pydeck，淺色底圖)並排顯示，對話命中的RAG地點用content_and_artifact機制回傳doc_ids，地圖以橘色光暈badge標示，多使用者OpenAI key隔離",
         "全端錯誤處理防線：RAG storage失敗/Langfuse執行期斷線/MCP isError全部補防護，詳細清單見ARCHITECTURE.md第3節",
-        "2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest+兩支smoke test+真實三輪對話瀏覽器驗證全數通過",
+        "2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest(當時數量，目前35個)+兩支smoke test+真實三輪對話瀏覽器驗證全數通過",
         "2026-10-07：Docker單一container(Dockerfile+docker-compose+fastembed build-time warmup)完成並真實驗證——本機裝colima補齊Docker環境，`docker compose up`起container後用真實多輪對話(RAG+真實CWA天氣查詢)驗證容器內cwa-mcp-server subprocess、RAG資料掛載、OpenAI呼叫全部正常，過程中抓到colima預設看不到外接磁碟導致bind mount變空目錄的真bug並修正",
         "2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過"
       ]
@@ -329,7 +329,7 @@
       "title": "設計重點 + Cache設計",
       "items": [
         "單一ReAct agent，5個工具(RAG+4個天氣工具)，未達multi-agent門檻",
-        "Guardrail是防呆天花板：recursion_limit=10、單session cost cap US$0.05-0.10，非預期日常會碰到",
+        "Guardrail是防呆天花板：recursion_limit=10(圖執行期間強制)、單session cost cap US$0.08(每輪開始前檢查累計花費，最後一輪可能略微超過)，非預期日常會碰到",
         "RAG Tool：✅lru_cache，資料只在手動重跑build_embeddings.py時變動",
         "Weather Tool：✅TTL 45分鐘手刻dict cache+threading.Lock+in-flight Future去重複，CWA資料以小時計更新"
       ]

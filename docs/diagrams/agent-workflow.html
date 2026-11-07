@@ -5195,14 +5195,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text x="1824.4" y="1395.0" class="t-security" font-size="27.4" font-weight="600">🔒 threading.Lock 併發保護</text>
 
         <!-- Edge paths -->
-        <path data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="0" data-edge-id="ci-cd" data-composition-points="428,2046;484.4,2046" d="M 428 2046 L 484.4 2046" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="各自觸發" data-edge-key="0" data-edge-id="ci-cd" data-composition-points="428,2046;484.4,2046" d="M 428 2046 L 484.4 2046" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="1" data-edge-id="guardrail-aborted" data-composition-points="1780.4,1094;1818.4,1094" d="M 1780.4 1094 L 1818.4 1094" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="guardrail" data-edge-to="rag_tool" data-edge-label="通過" data-edge-key="2" data-edge-id="guardrail-rag" data-composition-points="1590.4,1164;1590.4,1477;1818.4,1477" d="M 1590.4 1164 L 1590.4 1477 L 1818.4 1477" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="guardrail" data-edge-to="weather_tool" data-edge-key="3" data-edge-id="guardrail-weather" data-composition-points="1604.4,1164;1604.4,1662;1818.4,1662" d="M 1604.4 1164 L 1604.4 1662 L 1818.4 1662" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="planner" data-edge-to="router" data-edge-key="4" data-edge-id="planner-router" data-composition-points="1324.8,902;1400.4,902" d="M 1324.8 902 L 1400.4 902" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="planner" data-edge-to="trace" data-edge-label="記錄步驟+中斷" data-edge-key="5" data-edge-id="planner-trace" data-composition-points="944.8,909;864.4,909" d="M 944.8 909 L 864.4 909" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="rag_tool" data-edge-to="final" data-edge-label="整理成答案" data-edge-key="6" data-edge-id="rag-final" data-composition-points="2008.4,1547;2008.4,1563;2454.4,1563;2454.4,1547" d="M 2008.4 1547 L 2008.4 1563 L 2454.4 1563 L 2454.4 1547" class="a-emphasis" stroke-width="2.5" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="7" data-edge-id="router-guardrail" data-composition-points="1400.4,909;1384.4,909;1384.4,1184;1590.4,1184;1590.4,1164" d="M 1400.4 909 L 1384.4 909 L 1384.4 1184 L 1590.4 1184 L 1590.4 1164" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="router" data-edge-to="guardrail" data-edge-label="步數/成本上限" data-edge-key="7" data-edge-id="router-guardrail" data-composition-points="1400.4,909;1384.4,909;1384.4,1184;1590.4,1184;1590.4,1164" d="M 1400.4 909 L 1384.4 909 L 1384.4 1184 L 1590.4 1184 L 1590.4 1164" class="a-security" stroke-width="2.5" marker-end="url(#arrowhead-security)"/>
         <path data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="8" data-edge-id="router-planner-loop" data-composition-points="1590.4,839;1590.4,823;1134.8,823;1134.8,839" d="M 1590.4 839 L 1590.4 823 L 1134.8 823 L 1134.8 839" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="user" data-edge-to="webui" data-edge-key="9" data-edge-id="user-webui" data-composition-points="428,341;484.4,341" d="M 428 341 L 484.4 341" class="a-default" stroke-width="2.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="weather_tool" data-edge-to="final" data-edge-label="併入回答" data-edge-key="10" data-edge-id="weather-final" data-composition-points="2198.4,1662;2454.4,1662;2454.4,1547" d="M 2198.4 1662 L 2454.4 1662 L 2454.4 1547" class="a-dashed" stroke-width="2.5" marker-end="url(#arrowhead-dashed)"/>
@@ -5261,8 +5261,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <text data-detail="fine" x="1134.8" y="967" class="t-backend" font-size="19.6" text-anchor="middle">已驗證(多輪歷史隔離)</text>
         </g>
 
-        <g id="node-guardrail" data-node-id="guardrail" data-node-label="✅ Guardrail" tabindex="0" role="button" aria-label="Focus ✅ Guardrail, limit=10 / cost cap, Agent Runtime + 防呆 › 推理+選工具" aria-pressed="false" data-node-kind="security" data-node-sublabel="limit=10 / cost cap" data-node-tag="已驗證(超額測試)" data-node-context="Agent Runtime + 防呆 › 推理+選工具">
-          <title>✅ Guardrail · limit=10 / cost cap · Agent Runtime + 防呆 › 推理+選工具 · 已驗證(超額測試)</title>
+        <g id="node-guardrail" data-node-id="guardrail" data-node-label="✅ Guardrail" tabindex="0" role="button" aria-label="Focus ✅ Guardrail, limit=10 / cost cap, Agent Runtime + 防呆 › 推理+選工具" aria-pressed="false" data-node-kind="security" data-node-sublabel="limit=10 / cost cap" data-node-tag="示意位置，實作見ARCH 8.5" data-node-context="Agent Runtime + 防呆 › 推理+選工具">
+          <title>✅ Guardrail · limit=10 / cost cap · Agent Runtime + 防呆 › 推理+選工具 · 示意位置，實作見ARCH 8.5</title>
           <rect x="1400.4" y="1024" width="380" height="140" rx="6" class="c-mask"/>
           <rect x="1400.4" y="1024" width="380" height="140" rx="6" class="c-security" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(1406.4 1030) scale(0.6875)">
@@ -5271,7 +5271,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           </g>
           <text data-node-label="" data-detail-anchor="" x="1590.4" y="1067.0" class="t-primary" font-size="30.8" font-weight="600" text-anchor="middle">✅ Guardrail</text>
           <text data-detail="context" x="1590.4" y="1105.0" class="t-muted" font-size="22.4" text-anchor="middle">limit=10 / cost cap</text>
-        <text data-detail="fine" x="1590.4" y="1152" class="t-security" font-size="19.6" text-anchor="middle">已驗證(超額測試)</text>
+        <text data-detail="fine" x="1590.4" y="1152" class="t-security" font-size="19.6" text-anchor="middle">示意位置，實作見ARCH 8.5</text>
         </g>
 
         <g id="node-router" data-node-id="router" data-node-label="✅ Tool Router" tabindex="0" role="button" aria-label="Focus ✅ Tool Router, 選RAG或天氣工具, Agent Runtime + 防呆 › 推理+選工具" aria-pressed="false" data-node-kind="backend" data-node-sublabel="選RAG或天氣工具" data-node-tag="已驗證" data-node-context="Agent Runtime + 防呆 › 推理+選工具">
@@ -5366,9 +5366,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </g>
 
         <!-- Edge labels -->
-        <g data-detail="context" data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="測試通過" data-edge-key="0" data-edge-id="ci-cd">
+        <g data-detail="context" data-edge-from="ci_pipeline" data-edge-to="cd_pipeline" data-edge-label="各自觸發" data-edge-key="0" data-edge-id="ci-cd">
           <rect x="432" y="2026" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="456.2" y="1956.0" class="t-database" font-size="29.1" text-anchor="middle">測試通過</text>
+          <text x="456.2" y="1956.0" class="t-database" font-size="29.1" text-anchor="middle">各自觸發</text>
         </g>
         <g data-detail="context" data-edge-from="guardrail" data-edge-to="aborted" data-edge-label="超標" data-edge-key="1" data-edge-id="guardrail-aborted">
           <rect x="1784.4" y="1074" width="30" height="14" rx="3" class="c-mask"/>
@@ -5388,9 +5388,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <rect x="2202.4" y="1543" width="58" height="14" rx="3" class="c-mask"/>
           <text x="2231.4" y="1579.0" class="t-backend" font-size="29.1" text-anchor="middle">整理成答案</text>
         </g>
-        <g data-detail="context" data-edge-from="router" data-edge-to="guardrail" data-edge-label="呼叫工具前檢查" data-edge-key="7" data-edge-id="router-guardrail">
-          <rect x="1448.8000000000002" y="1164" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="1487.4" y="1202.0" class="t-security" font-size="29.1" text-anchor="middle">呼叫工具前檢查</text>
+        <g data-detail="context" data-edge-from="router" data-edge-to="guardrail" data-edge-label="步數/成本上限" data-edge-key="7" data-edge-id="router-guardrail">
+          <rect x="1451.2" y="1164" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="1487.4" y="1202.0" class="t-security" font-size="29.1" text-anchor="middle">步數/成本上限</text>
         </g>
         <g data-detail="context" data-edge-from="router" data-edge-to="planner" data-edge-label="多輪工具調用" data-edge-key="8" data-edge-id="router-planner-loop">
           <rect x="1328.8" y="803" width="67.6" height="14" rx="3" class="c-mask"/>
@@ -5636,7 +5636,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <li>&bull; Caching：RAG(lru_cache)+天氣(TTL 45分鐘+併發去重複)全部完成，fastembed模型快取改專案內固定路徑(原本在系統temp目錄會被清掉)</li>
           <li>&bull; Web UI：Streamlit對話(固定高度捲動+輸入框釘住)＋地圖(pydeck，淺色底圖)並排顯示，對話命中的RAG地點用content_and_artifact機制回傳doc_ids，地圖以橘色光暈badge標示，多使用者OpenAI key隔離</li>
           <li>&bull; 全端錯誤處理防線：RAG storage失敗/Langfuse執行期斷線/MCP isError全部補防護，詳細清單見ARCHITECTURE.md第3節</li>
-          <li>&bull; 2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest+兩支smoke test+真實三輪對話瀏覽器驗證全數通過</li>
+          <li>&bull; 2026-10-06修復：MemorySaver回傳累積歷史導致「歷史RAG失敗污染後續輪次」+「多輪cost重複累加」兩個安全機制本身的真bug，改用_current_turn_messages()只取最新輪切片修正。34個pytest(當時數量，目前35個)+兩支smoke test+真實三輪對話瀏覽器驗證全數通過</li>
           <li>&bull; 2026-10-07：Docker單一container(Dockerfile+docker-compose+fastembed build-time warmup)完成並真實驗證——本機裝colima補齊Docker環境，`docker compose up`起container後用真實多輪對話(RAG+真實CWA天氣查詢)驗證容器內cwa-mcp-server subprocess、RAG資料掛載、OpenAI呼叫全部正常，過程中抓到colima預設看不到外接磁碟導致bind mount變空目錄的真bug並修正</li>
           <li>&bull; 2026-10-17：CICD完成(CI+CD build/push)——push/PR跑pytest+docker build驗證、push到master自動build image打上latest+git SHA雙tag推到GHCR，兩段都在GitHub上真實觸發並通過</li>
         </ul>
@@ -5660,7 +5660,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         </div>
         <ul>
           <li>&bull; 單一ReAct agent，5個工具(RAG+4個天氣工具)，未達multi-agent門檻</li>
-          <li>&bull; Guardrail是防呆天花板：recursion_limit=10、單session cost cap US$0.05-0.10，非預期日常會碰到</li>
+          <li>&bull; Guardrail是防呆天花板：recursion_limit=10(圖執行期間強制)、單session cost cap US$0.08(每輪開始前檢查累計花費，最後一輪可能略微超過)，非預期日常會碰到</li>
           <li>&bull; RAG Tool：✅lru_cache，資料只在手動重跑build_embeddings.py時變動</li>
           <li>&bull; Weather Tool：✅TTL 45分鐘手刻dict cache+threading.Lock+in-flight Future去重複，CWA資料以小時計更新</li>
         </ul>

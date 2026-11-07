@@ -32,7 +32,7 @@ Project 1，2026-09-13起算，時程上限10週（見第7節）。完成定義�
 
 ## 2. RAG查詢層 ✅
 
-檔案預留：`code/rag.py`（純向量查詢）、`code/hybrid_search.py`（BM25+向量RRF融合）。
+檔案預留：`code/rag.py`、`code/hybrid_search.py`（BM25+向量RRF融合）。**(2026-11-07更正)** 實作後`rag.py`不是「純向量查詢」，而是對外入口：呼叫`hybrid_search.search()`取候選id→`reranker_fn.rerank_indices()`重排→用BM25語料的doc lookup組出Top-5文件與context；`hybrid_search.py`只負責產生候選id。
 
 - **Hybrid search**：BM25 Top-50 + Chroma向量 Top-50 → RRF融合排名
 - **Reranker**：`BAAI/bge-reranker-base`（fastembed內建`TextCrossEncoder`，跟embedding模型同家族、同樣CPU免費，不多裝依賴），精選Top-5
@@ -73,7 +73,7 @@ Project 1，2026-09-13起算，時程上限10週（見第7節）。完成定義�
 
 框架：LangGraph（使用者偏好現成框架，理由：業界多半也是框架上修改，非手刻）。
 
-- **架構**：單一ReAct agent，非multi-agent（工具數5個：hybrid_search + cwa-mcp-server四個天氣工具，遠低於「<10個工具用單一agent」門檻）
+- **架構**：單一ReAct agent，非multi-agent（工具數5個：hybrid_search + cwa-mcp-server四個天氣工具，遠低於「<10個工具用單一agent」門檻；**2026-11-07註**：`mcp_tools.py`是把MCP server `list_tools()`回傳的工具全部包起來，沒有名稱白名單，「四個」是目前`cwa-mcp-server`版本實際提供的數量，server若新增工具agent會自動多一個，見第8節）
 - **防線**：LangGraph自帶`recursion_limit`當迭代上限；cost累計中斷**獨立於Langfuse運作**——直接從LLM回應的`usage_metadata`(input/output tokens)換算費用累加，Langfuse斷線/沒設定guardrail仍然生效(原2026-09-14規劃寫的是靠Langfuse trace算費用，實作時改成更穩健的獨立算法，這裡同步更新，詳見下面「實作狀態」)
 - **不做**：人工審核層（此agent無刪除/退款等高風險操作，跳過）
 
@@ -112,7 +112,7 @@ Project 1，2026-09-13起算，時程上限10週（見第7節）。完成定義�
 **全端驗證與錯誤處理補強**(2026-09-30，委派Codex做系統性測試，我審查+在正式環境重跑驗證)：對照`docs/diagrams/agent-workflow.json`每個節點(`planner`/`router`/`guardrail`/`aborted`/`rag_tool`/`weather_tool`/`trace`/`final`，`webui`因尚未開工不算)逐一補「錯誤/例外路徑」測試，不只測happy path。抓到並修好4個真bug：
 1. **RAG工具storage失敗會外洩**：Chroma collection遺失/BM25 index損毀時，原本`rag.query()`的例外沒被`search_travel_info`工具接住，會直接讓agent看到raw exception。補`try/except`，回傳固定的「旅遊資料庫暫時無法查詢」訊息。
 2. **防幻覺safeguard只在docstring層，不夠硬**：即使RAG工具已經誠實回報失敗，LLM後續還是可能自己編一個看起來合理的答案(docstring只是軟性建議，非強制)。補程式碼層的**硬性覆寫**——`ask()`偵測到`search_travel_info`回傳失敗訊息時，直接忽略後續LLM訊息，強制回傳固定失敗訊息，不給LLM編答案的機會。
-3. **Langfuse只在初始化時防護，執行期沒有**：trace callback真的斷線時(不是建立handler失敗，是呼叫過程中失敗)原本沒接住，這次補上——執行期呼叫失敗會捕捉、停用trace、拿掉callback後重試一次，最終使用者拿到正常答案而非錯誤。
+3. **Langfuse只在初始化時防護，執行期沒有**：trace callback真的斷線時(不是建立handler失敗，是呼叫過程中失敗)原本沒接住，這次補上——執行期呼叫失敗會捕捉、停用trace、拿掉callback後重試一次，最終使用者拿到正常答案而非錯誤。**(2026-11-07補充實際行為)**：目前的實作只要「帶著Langfuse handler的`ainvoke()`丟出任何例外」就視為trace可能有問題，停用trace並重試一次，並沒有判斷例外是不是真的來自trace——所以一個與trace無關的失敗也會被重試一次；代價是可能多一次LLM/工具呼叫，而且失敗那次已經花掉的token不會算進`_thread_costs`(成本只在整輪成功完成後才計入)，換來的是「可觀測性不能拖垮核心功能」，且重試只做一次，不會無限重試。
 4. **MCP `CallToolResult(isError=True)`被當成正常天氣資料**：`mcp_tools.py`只組裝了回傳內容文字，沒檢查MCP協定本身的`isError`旗標，代表CWA那端回錯誤時，錯誤訊息會被當成正常天氣資料回傳並寫進cache。補上旗標檢查，`isError=True`時轉成例外，不快取、不當成功回傳。
 
 另外訂正一個cache邊角案例：只有owner（沒有其他等待者）且底層呼叫失敗時，內部`concurrent.futures.Future`的例外沒人領走，會在GC時噴「exception was never retrieved」警告(非功能性bug，純日誌雜訊)——改成owner也跟waiter一樣統一透過`asyncio.wrap_future()`拿結果/例外。
@@ -129,7 +129,7 @@ Project 1，2026-09-13起算，時程上限10週（見第7節）。完成定義�
 
 ## 4. Caching層 ✅
 
-- **RAG cache**：✅已完成——資料只在手動重跑`build_embeddings.py`時變動，用Python標準庫`functools.lru_cache`包`hybrid_search()`，key用正規化查詢字串。重建索引時順便清cache
+- **RAG cache**：✅已完成——資料只在手動重跑`build_embeddings.py`時變動，用Python標準庫`functools.lru_cache(maxsize=256)`包`hybrid_search.search()`，key是**原始查詢字串**(沒有做大小寫/空白正規化，不同寫法各佔一個cache項目)。**2026-11-07更正**：原文寫「重建索引時順便清cache」與實作不符——`build_embeddings.py`是獨立的離線腳本，不會呼叫`clear_cache()`；已在跑的app在重建索引後要重啟(或明確呼叫`hybrid_search.clear_cache()`/`rag.clear_cache()`)才會讀到新索引
 - **天氣cache**：✅已完成(2026-09-30，Codex實作、我審查套用)——`code/mcp_tools.py`裡`WeatherMCPTools._build_tool()`的`_acall`加了TTL cache：手刻dict存(結果,timestamp)，TTL取30-60分鐘中位數45分鐘(`WEATHER_CACHE_TTL_SECONDS`常數)，key用「工具名稱+排序後的完整JSON參數」組成，過期才重打API，沒裝Redis(單process單container量體，外部cache過度設計)。
 
   **比原規劃多做的一層**：吸取剛發現的併發競態bug教訓，這次一開始就用`threading.Lock()`保護cache讀寫，還多加了「in-flight請求去重」——同一組參數同時被多個併發工具呼叫miss到時，只有一個真的打API，其他等同一個`concurrent.futures.Future`共用結果，不會重複打API也不會重複扣guardrail的cost額度。Lock不跨`await`持有，避免卡住event loop。
@@ -223,6 +223,131 @@ Streamlit+pydeck（2026-10-01實際安裝——盤點時發現`requirements.txt`
 
 ---
 
+## 8. 補充說明：資料流、資料模型、參數、外部依賴、測試與已知限制（2026-11-07文件完整性稽核後新增）
+
+這一節是2026-11-07對照程式碼做文件完整性稽核(含Codex獨立稽核，每一條都回頭用程式碼驗證過才寫進來)後補上的，內容都以**目前的程式碼為準**。前面章節是依時間記錄的設計與踩坑歷史，若與這一節衝突，以這一節為準。
+
+### 8.1 離線資料流（有順序依賴）
+
+```
+觀光署 data.gov.tw 7777/7780/7779 ──> fetch_tourism.py ──> travel.db: attractions / lodgings / restaurants
+                                                              │
+                              derive_district_coords.py <─────┤  (由三張表平均座標 -> district_coords)
+                                                              │
+TDX 公車/YouBike/停車場 ──> fetch_transit.py ──> transit_stations
+                              │  (選用，需TDX金鑰)
+                              ├──> link_transit.py ──> attraction_transit，並刪除沒被引用的交通站
+                              └──> link_lodging_attraction.py ──> lodging_nearest_attraction
+                                                              │
+                              build_embeddings.py <───────────┘ 只讀 attractions/lodgings/restaurants
+                                  ├──> Data/chroma/ (向量索引，collection名稱`travel`)
+                                  └──> Data/bm25_index.pkl (BM25索引)
+```
+
+- **現在線上實際用到的只有三張內容表**：`attractions`、`lodgings`、`restaurants`（RAG索引、地圖都只讀這三張）。`transit_stations`、`attraction_transit`、`lodging_nearest_attraction`、`district_coords`在目前程式碼裡沒有任何執行期讀取者，是資料層保留(舊版架構曾用`district_coords`查天氣座標；現在天氣由`cwa-mcp-server`處理)。不跑這幾支腳本，目前的UI與RAG一樣能完整運作。
+- **冪等性**：`fetch_tourism.py`以來源ID做`ON CONFLICT DO UPDATE`、`fetch_transit.py`以`UNIQUE(tdx_id, type, city)`做upsert(TDX的parking資料集`tdx_id`跨縣市會重複，所以唯一鍵要三欄)；`link_*`與`derive_district_coords.py`是整張表刪除重算；`build_embeddings.py`是全量重建(約1.4萬筆，重跑成本比維護增量邏輯低)。
+- **破壞性步驟**：`link_transit.py`跑完會**刪除**沒被任何景點/住宿引用的交通站，只用「關聯筆數為0或交通站總數為0就中止」當保護(防的是join沒對上，例如city格式不一致)；`build_embeddings.py`會先刪除再重建Chroma collection。
+
+### 8.2 資料模型（`collector/db.py`，7張表）
+
+| 表 | 內容 | 執行期使用 |
+|---|---|---|
+| `attractions` | 景點：名稱、座標、分類、描述、`weather_fit` | ✅ RAG索引、地圖 |
+| `lodgings` | 住宿：名稱、座標、價格區間、描述 | ✅ RAG索引、地圖 |
+| `restaurants` | 餐廳：名稱、座標、料理分類、描述 | ✅ RAG索引、地圖 |
+| `transit_stations` | 公車/YouBike/停車場站點 | ❌ 資料層保留 |
+| `attraction_transit` | 景點/住宿→最近交通站(1500公尺內) | ❌ 資料層保留 |
+| `lodging_nearest_attraction` | 住宿→最近景點 | ❌ 資料層保留 |
+| `district_coords` | 行政區中心座標(367筆) | ❌ 資料層保留 |
+
+分類欄位來源：`attraction_classes.py`、`cuisine_classes.py`的代碼表來自觀光資訊資料庫的官方分類；`weather_fit`(室內/戶外適合度)是**本專案自己定義的衍生欄位**，不是官方資料，且目前RAG與agent都不依它過濾(見第2節「不吃`weather_fit`」)，這個分類是依代碼中文名稱的字面意義判斷，`attraction_classes.py`檔頭註明「第一版跑完需要人工抽樣核對」，混合類(如觀光遊樂業)刻意歸為`unknown`而不硬分。
+
+### 8.3 資料清洗與關聯規則（原本只寫在程式碼註解裡）
+
+| 規則 | 位置 | 原因/取捨 |
+|---|---|---|
+| 座標(0,0)視為缺值(存NULL) | `fetch_tourism.py::_clean_latlon` | 觀光署資料沒座標時填(0,0)佔位，不是真的在幾內亞灣 |
+| 交通站唯一鍵`(tdx_id, type, city)` | `db.py`、`fetch_transit.py` | `tdx_id`不是全台唯一，同id跨縣市是不同站 |
+| TDX每13秒一次、請求例外或非200回應就略過該縣市/類型 | `fetch_transit.py` | 免費會員5次/分的頻率限制；只有「請求失敗」會略過並印`[skip]`，代價是可能漏資料；回應內容解析或寫入出錯仍會讓腳本中止。`fetch_tourism.py`沒有逐筆略過機制，下載/解析/寫入出錯會直接中止 |
+| 景點/住宿到交通站：同城市、1500公尺內、0.01度(約1.1公里)網格 | `link_transit.py` | 用網格只比對同格+鄰近8格，不整表兩兩比較；超過1500公尺不算有效關聯 |
+| 住宿到最近景點：網格半徑逐步擴大，最多19格，找不到就不建立關聯 | `link_lodging_attraction.py` | 景點比交通站稀疏，一格內不一定有；同樣是為了避免整表比對 |
+| 行政區中心=該區景點/住宿/餐廳座標平均；樣本<3筆會列出 | `derive_district_coords.py` | 不另外引入shapely處理shapefile；偏遠鄉鎮可能沒資料或不夠準 |
+| 住宿描述≤20字不進索引(`LODGING_MIN_DESC_LEN=20`)；餐廳排除空描述 | `build_embeddings.py` | 住宿描述雙峰分布，中位數8字多是樣板句，20字是兩群之間的斷層；餐廳資料集約15%描述是空的 |
+
+### 8.4 檢索參數
+
+| 參數 | 值 | 位置 | 角色與取捨 |
+|---|---|---|---|
+| 向量候選數、BM25候選數 | 各Top-50 | `hybrid_search.TOP_K_EACH` | 讓兩邊的候選有足夠重疊與互補；太小會漏掉只被其中一邊排在較後面的正解，太大則rerank成本變高 |
+| `RRF_K` | 60 | `hybrid_search.py` | RRF的標準常數，沒有針對這份資料調過 |
+| 最終回傳 | Top-5 | `rag.TOP_K_FINAL`、reranker | 交給LLM的context長度與相關性的折衷 |
+| `search()`快取 | `lru_cache(maxsize=256)` | `hybrid_search.py` | key是原始查詢字串，只在process重啟或明確`clear_cache()`時清空 |
+| Chroma collection名稱 | `travel` | `hybrid_search.COLLECTION_NAME` | 三種內容共用一個collection，用`type`/`city`等metadata區分 |
+
+這幾個值都是「合理預設」，沒有做系統性的參數掃描；若要調整，應該用v2評估集(第2節)比較Context Recall變化再決定。
+
+### 8.5 Agent的成本與模型選擇
+
+- **模型**：`gpt-4o-mini`(`agent.MODEL_NAME`)。選擇理由是成本低、支援工具呼叫、中文表現足夠；沒有與其他模型做過系統性的A/B比較(「為什麼不換Anthropic」見第3節)。
+- **成本估算是估算，不是帳單**：`_PRICE_PER_1M_INPUT_TOKENS=0.15`、`_PRICE_PER_1M_OUTPUT_TOKENS=0.60`寫死在`agent.py`，來源是2026-09的OpenAI官方定價頁，定價異動時需手動更新；只計LLM回應的`usage_metadata`，不含embedding(本地免費)與其他費用。
+- **成本上限是「每輪開始前」的軟上限，不是每次工具呼叫前攔截**：`ask()`在呼叫`ainvoke()`之前檢查`_thread_costs[thread_id] >= COST_THRESHOLD_USD`，整輪成功結束後才把這一輪的花費加進去。所以最後一個還沒超過上限的回合可以讓累計花費**略微超過**US$0.08（最多多出一輪的花費）。這在「純防呆天花板」的定位下被接受；`recursion_limit=10`才是單輪內的步數上限(由LangGraph在圖執行期間強制)。
+- **`_thread_costs`是process內的全域dict**，不會清除舊thread的項目；單機demo的規模下不構成問題，若長時間跑大量session需要加清理。
+
+### 8.6 外部依賴與網路地圖
+
+| 時機 | 依賴 | 用途 | 失敗時 |
+|---|---|---|---|
+| build（Docker） | Hugging Face | 下載embedding與reranker模型(`warmup_fastembed.py`) | build失敗，CI變紅 |
+| 離線收集 | data.gov.tw、TDX | 抓資料 | TDX的請求失敗會略過該縣市/類型並印log；其他錯誤與觀光署下載失敗會讓腳本中止 |
+| 請求時 | OpenAI API | LLM呼叫 | 回固定的「系統暫時無法完成查詢」訊息 |
+| 請求時 | 中央氣象署（經`cwa-mcp-server`子程序） | 天氣工具 | 工具回錯誤(`isError`)時不快取、不當成功資料 |
+| 請求時（選用） | Langfuse | trace | 停用trace重試一次 |
+| 頁面載入時 | Google Fonts(CSS `@import`)、pydeck底圖(`pdk.map_styles.LIGHT`，遠端圖磚) | 字型與地圖底圖 | 離線時字型退回系統字、底圖空白，點位仍會畫 |
+
+**天氣子程序啟動失敗會讓整個agent無法建立**：`WeatherAgent.__aenter__()`先啟動`cwa-mcp-server`並`list_tools()`，失敗(例如沒設`CWA_API_KEY`、套件找不到)會清理後把例外往上丟，`app.py`把所有失敗統一顯示成通用錯誤訊息；沒有「天氣不可用時退化成只做RAG」的降級路徑，也沒有對`CWA_API_KEY`做格式驗證(不像UI對OpenAI key有基本檢查)。這是目前的限制，不是刻意設計。
+
+### 8.7 索引重建的一致性與快取生命週期
+
+- **重建不是原子的**：`build_embeddings.py`先刪除Chroma collection、分批(每批100筆)寫入，最後才寫BM25檔。中途失敗可能留下只建了一半的Chroma，或Chroma與BM25不同代。`rag.query()`只能偵測最極端的情況(候選id在doc lookup裡一個都找不到時丟明確錯誤)。選擇不做staging/版本化是因為資料量小(約1.4萬筆)、重跑成本低；復原方式是修好問題後整個重跑，並重啟app。
+- **快取都是process內、無上限或僅有簡單過期**：天氣快取`_weather_cache`過期後只是不再被採用，舊項目要等同一個key成功重打一次才會被覆蓋(重打失敗時舊項目仍留在dict裡)，也沒有最大筆數；`hybrid_search.search()`是`lru_cache(256)`；兩者都隨process重啟清空。單process單container的demo規模下可接受，量體變大時才需要Redis或明確的eviction。
+
+### 8.8 測試清單（共35個pytest，全部mock，不打真實API）
+
+| 檔案 | 數量 | 涵蓋 |
+|---|---|---|
+| `code/test_error_handling.py` | 17 | RAG工具失敗路徑(零命中/Chroma遺失/BM25損毀)、防幻覺硬覆寫、prompt injection防護有接進agent、當輪切片(歷史失敗不污染/cost不重複累加/doc_ids不沿用)、recursion_limit與cost cap的乾淨訊息、Langfuse執行期失敗重試、進入失敗時的資源清理 |
+| `code/test_hybrid_search.py` | 11 | RRF融合(含精確分數、缺一邊、空輸入)、`detect_cities()`(單一/模糊/完整名稱不被放寬/「台」「臺」/別名/多縣市) |
+| `code/test_mcp_tools_cache.py` | 7 | 天氣TTL快取(命中/過期/不同參數)、併發同key只打一次、併發失敗所有等待者都收到例外、`isError`不快取、部分進入失敗時清理 |
+
+**不在pytest裡的驗收**：`code/smoke_test_rag.py`(22縣市+邊界案例，需要本機`Data/`)、`code/smoke_test_agent.py`(真實OpenAI與CWA，會花錢；涵蓋多輪對話、多需求併發、guardrail、天氣工具)、`code/rag_quality/run_eval.py`(ragas，會呼叫OpenAI)。**CI只跑`pytest -q`與Docker build**，上面這三項都不在CI裡。
+
+**RAG品質門檻目前是人工比對標準，不是自動檢查**：第2節列的Faithfulness≥0.80、Context Recall≥0.50、Answer Relevancy≥0.50只是比對基準，`run_eval.py`只計算並寫出結果，不會因低於門檻而失敗，CI也沒有跑它。
+
+### 8.9 Docker 與相依套件的營運細節
+
+- **HEALTHCHECK**：每30秒打`/_stcore/health`，逾時5秒、啟動後前20秒不計、連續3次失敗標為unhealthy。它只證明Streamlit還活著，**不證明資料有掛對**(見第6節colima bind mount教訓)，所以上線前要另做一次會真的讀資料的查詢。用Python內建`urllib`而不是`curl`，因為slim image沒有curl。
+- **`restart: unless-stopped`**：container當掉或Docker重啟時自動拉起，除非手動停止。**埠`8501:8501`**是Streamlit預設埠。
+- **`requirements.txt`**：直接依賴與傳遞依賴全部用`==`釘死，原因是第0段「環境」記錄的兩個相容坑(fastembed、langchain家族)——不釘版本重裝時pip會解析到互不相容的新世代。更新套件時的做法：在乾淨venv重新安裝後跑35個pytest與`smoke_test_rag.py`，通過再更新釘住的版本。Python版本為3.11。
+- **`.dockerignore`**：排除`Data`(執行時掛載)、`.env*`(金鑰不能進image，推到registry後每一層都能被取出)、虛擬環境、快取與版本控制資料夾；保留`.env.example`。
+
+### 8.10 目前UI架構（取代第5節裡依時間記錄的多輪改版敘述）
+
+第5節按日期記錄了4輪視覺改版，其中有些描述已被後面的改版取代。**以`code/app.py`與`.streamlit/config.toml`為準的目前狀態**：
+
+- 版面：對話與地圖**並排兩欄**(`st.columns([5, 7])`)，不是頁籤。
+- 主題：`.streamlit/config.toml`的`primaryColor`是橘色`#eb6834`(對應地圖「住宿」類別色)，底色偏淺灰綠。
+- 樣式：`app.py`用`st.markdown(..., unsafe_allow_html=True)`注入大量自訂CSS，並用`@import`載入Google Fonts(IBM Plex Sans/Mono)——所以第5節「全程只用Streamlit原生元件，沒加CSS/JS」那句只描述當時的第一版。
+- 地圖：pydeck `ScatterplotLayer`依類別上色；agent命中的地點用橘色光暈/外框標示，並把地圖置中到這些點的平均位置、以固定縮放(zoom 10.5)顯示，不會依點的範圍調整縮放。
+
+### 8.11 其他已知限制
+
+- **`.env.example`**原本漏列`CWA_API_KEY`(2026-11-07已補)。
+- **已移除的舊檔案**：`Data/cctv_enhanced.csv`(約624筆公路監視器，舊版架構遺留，沒有任何程式碼讀取、授權來源不明)已於2026-11-07從版控刪除；若需要仍可從git歷史取回。
+- **程式註解裡的過時引用**：`collector/build_embeddings.py`的docstring仍寫「詳見 ROADMAP.md」，該檔案已不存在，決策脈絡以本文件為準。
+- **`weather_fit`欄位已建立並寫進索引metadata，但目前沒有任何查詢依它過濾**；其分類是字面判斷，準確率是否已做人工抽樣核對，專案紀錄裡沒有留下結果。
+
+---
+
 ## 決策記錄
 
 - 2026-09-14：Agent用現成框架非手刻；RAG的hybrid search+reranker+eval全做不砍；地圖UI用簡單網頁呈現；reranker/cache TTL採用AI建議之預設值（BAAI/bge-reranker-base、天氣cache 30-60分鐘TTL、RAG cache用lru_cache無時間TTL）。
@@ -255,3 +380,4 @@ Streamlit+pydeck（2026-10-01實際安裝——盤點時發現`requirements.txt`
 - 2026-10-13：使用者主動問「系統有沒有防護惡意注入(prompt injection)」，查`code/agent.py`才發現`create_react_agent`完全沒有system prompt——詳見第3節新增的「Prompt injection防護」小節。先研究OWASP LLM01跟RAG agent常見防護手法框定範圍，再委派Codex實作+要求Codex自己獨立評估這個範圍對這個project是不是恰當(不是只回報「做完了」)。Codex的獨立評估結論：範圍恰當，因為這個project的工具都唯讀、機密不會進LLM context，剩下的風險主要是「答案/角色被操弄」而非「破壞性動作或憑證竊取」，分類模型/防火牆服務/紅隊pipeline這類企業級防護對目前規模是過度工程。我自己額外做了這次沒讓Codex做過的驗證層級：真實瀏覽器送3種真實attack(洩漏system prompt、角色覆寫、洩漏CWA_API_KEY)到正式UI，全部被正確拒絕，且拒絕後agent正常功能(天氣查詢)沒有被一起擋掉——這是比pytest更強的驗證，因為pytest只能確認「prompt字串裡有沒有對的句子」，沒辦法確認LLM真的會遵守。
 - 2026-10-17：新增`.github/workflows/cd.yml`(push到`master`觸發，build image後同時打`latest`+git SHA兩個tag推到`ghcr.io/gary2376/weatherllm`，用workflow自己宣告的`permissions: packages: write`而非依賴repo全域設定)；`docker-compose.yml`加上`image: ghcr.io/gary2376/weatherllm:latest`跟原本的`build:`並存，不用拆兩份compose檔。CD隨後經Codex獨立複核補上兩個真缺口：測試沒過也能發布(改成`build-and-push`用`needs: test`等同檔的pytest job)、連續push可能讓舊run後完成而蓋掉`latest`(加`concurrency`)。
 - 2026-11-05：使用者決定不做公開部署，專案範圍止於本機Docker + CICD(CI + CD build→推GHCR)；移除文件、流程圖中所有部署相關規劃與平台評估。
+- 2026-11-07：使用者要求確認文件是否涵蓋專案所有「架構、資訊、背景、原因」，並請Codex一起檢查。Codex獨立稽核回報14個中高嚴重度缺口與4個低嚴重度項目，我對照程式碼逐項驗證後：新增`README.md`(原本完全沒有onboarding文件，fresh clone無法照文件跑起來)、`docs/GLOSSARY.md`、本文件第8節，更正5處過時/不實描述(`rag.py`不是純向量查詢、工具清單無白名單、RAG cache key不是正規化字串且重建索引不會自動清cache、Langfuse重試是「任何例外」而非只偵測trace斷線、成本上限是每輪開始前的軟上限)；`DATA_LICENSE.md`原本寫的是舊版架構用的Open-Meteo，現在天氣來自中央氣象署，已改寫，並發現孤兒檔案`Data/cctv_enhanced.csv`(隨後已刪除)；`.env.example`補上漏列的`CWA_API_KEY`；流程圖修正兩處與實際不符(CI→CD不是「測試通過」關係、guardrail不是每次工具呼叫前攔截)。**教訓**：舊版架構的文件(Open-Meteo授權、CI→CD關係、程式註解裡的ROADMAP.md引用)會在架構改寫後悄悄過時，單靠「文件有寫」不代表「文件是對的」，需要定期用程式碼對照。
