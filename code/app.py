@@ -1,6 +1,7 @@
 """Streamlit Web UI for the weather-aware Taiwan travel agent."""
 
 import asyncio
+import os
 import sqlite3
 import sys
 import uuid
@@ -379,7 +380,9 @@ def hex_to_rgba(hex_color: str, alpha: int = 190) -> list[int]:
     return [int(value[index : index + 2], 16) for index in (0, 2, 4)] + [alpha]
 
 
-async def ask_agent(api_key: str, user_text: str) -> tuple[str, float, list[str]]:
+async def ask_agent(
+    api_key: str, user_text: str, cwa_api_key: str = ""
+) -> tuple[str, float, list[str]]:
     # Streamlit reruns the script for every message. Reusing MemorySaver keeps
     # conversation state while a fresh MCP subprocess is opened per turn. If
     # that startup cost becomes material, the upgrade path is a persistent
@@ -387,6 +390,7 @@ async def ask_agent(api_key: str, user_text: str) -> tuple[str, float, list[str]
     async with WeatherAgent(
         openai_api_key=api_key,
         checkpointer=st.session_state.checkpointer,
+        cwa_api_key=cwa_api_key,
     ) as agent:
         reply, doc_ids = await agent.ask(st.session_state.thread_id, user_text)
         return reply, agent.cost_so_far(st.session_state.thread_id), doc_ids
@@ -449,7 +453,9 @@ def render_chat_tab(api_key: str, key_is_valid: bool) -> None:
                 cost_before_turn = st.session_state.total_cost
                 st.session_state.last_turn_cost = 0.0
                 try:
-                    reply, cost, doc_ids = asyncio.run(ask_agent(api_key, user_text))
+                    reply, cost, doc_ids = asyncio.run(
+                        ask_agent(api_key, user_text, st.session_state.get("cwa_api_key", ""))
+                    )
                 except Exception:  # noqa: BLE001 — never expose service internals or secrets in the UI
                     reply = "系統暫時無法完成查詢，請稍後再試。"
                     st.session_state.last_matched_doc_ids = []
@@ -683,6 +689,27 @@ def main() -> None:
         st.sidebar.info("請輸入自己的 OpenAI API Key 才能開始對話。")
     elif not key_is_valid:
         st.sidebar.error("API Key 格式不正確，必須以 sk- 開頭。")
+
+    cwa_key = st.sidebar.text_input(
+        "氣象署 API 金鑰（選填）",
+        type="password",
+        key="cwa_api_key",
+        help=(
+            "只有要查即時天氣時才需要。到中央氣象署「氣象資料開放平臺」"
+            "(opendata.cwa.gov.tw) 免費註冊就能取得授權碼。"
+            "只保存在目前瀏覽器工作階段；有填就優先使用你的金鑰。"
+        ),
+    ).strip()
+    if cwa_key:
+        st.sidebar.caption("天氣查詢：使用你填寫的金鑰。")
+        if not cwa_key.startswith("CWA-"):
+            st.sidebar.warning("氣象署金鑰通常以 CWA- 開頭，請確認是否貼對。")
+    elif os.getenv("CWA_API_KEY"):
+        st.sidebar.caption("天氣查詢：使用展示站的預設金鑰；想用自己的額度可在上方填入。")
+    else:
+        st.sidebar.caption(
+            "天氣查詢：尚未啟用，目前只能詢問景點、住宿與餐廳。要查即時天氣，請在上方填入氣象署金鑰。"
+        )
 
     st.sidebar.divider()
     st.sidebar.header("使用量")

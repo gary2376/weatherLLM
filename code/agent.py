@@ -145,21 +145,55 @@ def _build_langfuse_handler():
         return None
 
 
-class WeatherAgent:
-    """封裝ReAct agent + cwa-mcp-server stdio連線的生命週期。"""
+# 沒有可用的天氣工具時附加在system prompt後面：誠實告知，不要編造天氣。
+WEATHER_UNAVAILABLE_NOTE = """
+Weather tools are NOT available in this session. If the user asks about weather,
+say briefly that live weather lookup is currently unavailable and that they can enter
+their own CWA API key in the sidebar to enable it. Never invent weather data.
+Keep helping with Taiwan attractions, lodging, restaurants and trip planning.
+"""
 
-    def __init__(self, openai_api_key: Optional[str] = None, checkpointer=None):
+
+class WeatherAgent:
+    """封裝ReAct agent + cwa-mcp-server stdio連線的生命週期。
+
+    天氣是選用功能：氣象署金鑰優先用使用者自己填的(cwa_api_key)，沒填才用操作者在
+    環境變數設定的CWA_API_KEY；兩者都沒有、或天氣子程序啟動失敗時，agent退化成只提供
+    旅遊問答(RAG)，不會整個建不起來。使用者填的金鑰不合法時不會偷偷改用操作者的額度，
+    天氣查詢會回報錯誤，由使用者自己更正。
+    """
+
+    def __init__(
+        self,
+        openai_api_key: Optional[str] = None,
+        checkpointer=None,
+        cwa_api_key: Optional[str] = None,
+    ):
         load_dotenv()
-        self._weather = WeatherMCPTools(os.getenv("CWA_API_KEY"))
+        user_key = (cwa_api_key or "").strip()
+        operator_key = (os.getenv("CWA_API_KEY") or "").strip()
+        self.cwa_key_source = "user" if user_key else ("operator" if operator_key else "none")
+        key = user_key or operator_key
+        self._weather = WeatherMCPTools(key) if key else None
+        self.weather_enabled = False
         self._graph = None
         self._langfuse_handler = None
         self._openai_api_key = openai_api_key
         self._checkpointer = checkpointer or MemorySaver()
 
     async def __aenter__(self) -> "WeatherAgent":
-        await self._weather.__aenter__()
+        weather_tools: list = []
+        if self._weather is not None:
+            try:
+                await self._weather.__aenter__()
+                weather_tools = list(self._weather.tools)
+            except Exception as exc:  # noqa: BLE001 — 天氣是選用功能，啟動失敗就只提供旅遊問答
+                logger.warning("天氣工具啟動失敗(%s)，改為只提供旅遊問答。", type(exc).__name__)
+                self._weather = None
+        self.weather_enabled = bool(weather_tools)
         try:
-            tools = [search_travel_info, *self._weather.tools]
+            tools = [search_travel_info, *weather_tools]
+            prompt = SYSTEM_PROMPT if self.weather_enabled else SYSTEM_PROMPT + WEATHER_UNAVAILABLE_NOTE
             llm_kwargs = {"model": MODEL_NAME}
             if self._openai_api_key:
                 llm_kwargs["api_key"] = self._openai_api_key
@@ -167,7 +201,7 @@ class WeatherAgent:
             self._graph = create_react_agent(
                 llm,
                 tools,
-                prompt=SYSTEM_PROMPT,
+                prompt=prompt,
                 checkpointer=self._checkpointer,
             )
             self._langfuse_handler = _build_langfuse_handler()
@@ -175,11 +209,13 @@ class WeatherAgent:
         except BaseException:
             # Python does not call __aexit__ when __aenter__ raises. Roll back the
             # already-open MCP lifecycle explicitly so its stdio child cannot leak.
-            await self._weather.__aexit__(*sys.exc_info())
+            if self._weather is not None:
+                await self._weather.__aexit__(*sys.exc_info())
             raise
 
     async def __aexit__(self, *exc_info) -> None:
-        await self._weather.__aexit__(*exc_info)
+        if self._weather is not None:
+            await self._weather.__aexit__(*exc_info)
 
     async def ask(self, thread_id: str, user_input: str) -> tuple[str, list[str]]:
         """單輪對話；一般graph例外在有Langfuse handler時會停用handler防禦性重試一次。"""

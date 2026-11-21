@@ -9,6 +9,13 @@
 - **工程化**：Docker 單一 container、GitHub Actions CI（pytest + image build）與 CD（pytest 通過後推到 GHCR）。
 - **使用方式**：在自己的電腦用 Python 或 Docker 執行；本專案不提供線上服務。
 
+## 線上試用
+
+**[weatherllm-hpes8wsx4xalrwfvawbzgq.streamlit.app](https://weatherllm-hpes8wsx4xalrwfvawbzgq.streamlit.app/)**（Streamlit Community Cloud，免費方案閒置會休眠，第一次開啟可能要等一下）。
+
+- 對話需要在側邊欄填入**你自己的 OpenAI API Key**（只保存在你的瀏覽器工作階段）。
+- 想查**即時天氣**，可在側邊欄選填**氣象署 API 金鑰**（到[氣象資料開放平臺](https://opendata.cwa.gov.tw/)免費註冊取得）；有填就優先使用你的金鑰，沒填且展示站沒有預設金鑰時，只能詢問景點、住宿與餐廳。
+
 ## 畫面預覽
 
 以下是在本機執行的實際畫面。
@@ -57,7 +64,7 @@
 
 | 變數 | 誰提供 | 用途 | 沒有會怎樣 |
 |---|---|---|---|
-| `CWA_API_KEY` | 操作者（免費申請） | 傳給 `cwa-mcp-server` 查天氣 | agent 建構時啟動天氣子程序失敗，網頁顯示通用錯誤訊息 |
+| `CWA_API_KEY` | 操作者（免費申請，選填） | 傳給 `cwa-mcp-server` 查天氣；使用者在側邊欄填了自己的金鑰時，優先用使用者的 | 沒有時只提供旅遊問答，天氣查詢會說明無法使用 |
 | `OPENAI_API_KEY` | 網頁使用者在側邊欄自己貼 | LLM 呼叫（`gpt-4o-mini`） | 網頁不讓 agent 執行。命令列的 smoke test 與 eval 才從環境變數讀 |
 | `TDX_CLIENT_ID`、`TDX_CLIENT_SECRET` | 操作者（免費會員） | 只有 `collector/fetch_transit.py` 用 | 不跑交通資料收集就不需要 |
 | `WEATHERLLM_RERANK` | 選用 | 設為 `0` 時略過重排序模型（輕量模式），記憶體從約 3.7GB 降到約 0.8GB | 預設啟用重排序 |
@@ -126,7 +133,7 @@ app 啟動時若找不到 `Data/`，會自動從本 repo 的 Release 下載資�
 2. **Advanced settings**：Python 版本選 **3.11**；在 **Secrets** 填入
 
    ```toml
-   CWA_API_KEY = "你的中央氣象署金鑰"
+   CWA_API_KEY = "你的中央氣象署金鑰"   # 選填；不填的話訪客要自己填金鑰才能查天氣
    WEATHERLLM_RERANK = "0"
    ```
 

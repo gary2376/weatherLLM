@@ -60,9 +60,15 @@ def test_rag_tool_attaches_matched_doc_ids_as_artifact(monkeypatch):
     assert result.artifact == {"doc_ids": ["attraction:Attraction_1"]}
 
 
+@tool
+def _fake_weather_tool(city: str) -> str:
+    """fake weather tool for tests"""
+    return "sunny"
+
+
 def test_agent_passes_prompt_injection_defense_to_react_agent(monkeypatch):
     class FakeWeather:
-        tools = []
+        tools = [_fake_weather_tool]
 
         async def __aenter__(self):
             return self
