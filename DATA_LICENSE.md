@@ -25,6 +25,10 @@
 - **本專案的顯名聲明**：
   > 資料來源：交通部TDX運輸資料流通服務平臺（2026），依[政府資料開放授權條款－第1版](https://data.gov.tw/license)釋出。
 
+## 預先建好的資料包（GitHub Release `data-v1`）
+
+為了讓新環境（例如 Streamlit Community Cloud）不必重跑 collector，本 repo 的 Release 提供預先建好的資料包（`travel.db`、`bm25_index.pkl`、`chroma/`，約 90MB），內容全部來自上面第 1、2 項的政府開放資料與由它們計算出的衍生資料（行政區中心點、關聯表、向量索引），依同一份「政府資料開放授權條款－第1版」散布，並需保留上面的顯名聲明。程式碼不內含這些資料；`code/bootstrap_data.py` 會在需要時下載並比對 SHA-256。
+
 ## 3. 行政區座標（`district_coords`表）
 
 - **性質**：不是外部資料，是`collector/derive_district_coords.py`從上面兩類資料（景點/住宿/餐廳的座標）平均計算出來的**衍生資料**

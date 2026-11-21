@@ -4,6 +4,7 @@
 ids/texts/metadatas當id→文件內容的查表(建索引時是同一份docs，兩邊id保證對得
 上，不用再查一次Chroma拿文字) → reranker_fn精選Top-5 → 組成給LLM讀的context。
 """
+import os
 import sys
 import threading
 from pathlib import Path
@@ -17,6 +18,13 @@ import hybrid_search
 import reranker_fn
 
 TOP_K_FINAL = 5
+
+
+def _rerank_enabled() -> bool:
+    """WEATHERLLM_RERANK=0 時略過 reranker(輕量模式)，直接取 RRF 融合後的前 k 筆。
+    reranker 模型約 1GB，載入後整個程序會到 3GB 以上；免費託管環境的記憶體放不下。
+    預設啟用，行為不變。"""
+    return os.getenv("WEATHERLLM_RERANK", "1") != "0"
 
 
 class Document(TypedDict):
@@ -75,6 +83,8 @@ def query(user_query: str, top_k: int = TOP_K_FINAL) -> List[Document]:
         )
     if not candidates:
         return []
+    if not _rerank_enabled():
+        return candidates[:top_k]
     texts = [c["text"] for c in candidates]
     top_indices = reranker_fn.rerank_indices(user_query, texts, top_k=top_k)
     return [candidates[i] for i in top_indices]

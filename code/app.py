@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from collector.db import DB_PATH  # noqa: E402
 
 from agent import WeatherAgent  # noqa: E402
+from bootstrap_data import BootstrapDataError, ensure_data_present  # noqa: E402
 
 
 st.set_page_config(
@@ -639,8 +640,19 @@ def render_map_tab() -> None:
     st.caption(f"目前顯示 {len(all_visible):,} 個地點。")
 
 
+def ensure_data_ready() -> None:
+    """Data/ 不在(例如全新部署)時，從 GitHub Release 下載資料包。失敗就停止，不讓後面查到空資料庫。"""
+    try:
+        with st.spinner("首次啟動，正在下載旅遊資料(約 100MB)，請稍候…"):
+            ensure_data_present()
+    except BootstrapDataError:
+        st.error("無法取得旅遊資料，請稍後重新整理頁面再試。")
+        st.stop()
+
+
 def main() -> None:
     initialize_session()
+    ensure_data_ready()
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
     st.markdown(

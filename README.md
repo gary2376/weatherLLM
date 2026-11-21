@@ -28,7 +28,7 @@
 ## 整體資料流
 
 ```
-【離線：建立資料，只在更新資料時手動跑】
+【離線：建立資料，只在更新資料時手動跑（或直接下載預先建好的資料包）】
   觀光署資料集(7777/7780/7779) ─┐
   TDX公車/YouBike/停車場(選用) ─┼─> collector/fetch_*.py ─> Data/travel.db (SQLite)
                                  │         └─> link_*.py、derive_district_coords.py(衍生欄位/關聯表)
@@ -49,7 +49,7 @@
 | `code/` | 線上執行的程式：`app.py`（UI）、`agent.py`、`mcp_tools.py`、`rag.py`、`hybrid_search.py`、`reranker_fn.py`，以及 pytest 測試與 smoke test |
 | `code/rag_quality/` | RAG 評估集建立與執行（ragas） |
 | `collector/` | 離線資料收集與索引建置腳本 |
-| `Data/` | 產出的資料（SQLite、Chroma、BM25、模型快取）。產出物不進版控，需自己跑 collector 產生 |
+| `Data/` | 產出的資料（SQLite、Chroma、BM25、模型快取）。產出物不進 git，可下載 Release 的資料包或自己跑 collector 重建 |
 | `Dockerfile`、`docker-compose.yml`、`warmup_fastembed.py`、`.dockerignore` | 容器化 |
 | `.github/workflows/` | `ci.yml`、`cd.yml` |
 
@@ -60,6 +60,8 @@
 | `CWA_API_KEY` | 操作者（免費申請） | 傳給 `cwa-mcp-server` 查天氣 | agent 建構時啟動天氣子程序失敗，網頁顯示通用錯誤訊息 |
 | `OPENAI_API_KEY` | 網頁使用者在側邊欄自己貼 | LLM 呼叫（`gpt-4o-mini`） | 網頁不讓 agent 執行。命令列的 smoke test 與 eval 才從環境變數讀 |
 | `TDX_CLIENT_ID`、`TDX_CLIENT_SECRET` | 操作者（免費會員） | 只有 `collector/fetch_transit.py` 用 | 不跑交通資料收集就不需要 |
+| `WEATHERLLM_RERANK` | 選用 | 設為 `0` 時略過重排序模型（輕量模式），記憶體從約 3.7GB 降到約 0.8GB | 預設啟用重排序 |
+| `WEATHERLLM_DATA_URL`、`WEATHERLLM_DATA_SHA256` | 選用 | 自訂資料包的下載網址與對應的 SHA-256（64 位十六進位，兩者要一起設） | 預設用本 repo 的 Release |
 | `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_HOST` | 操作者（選用） | 可觀測性 trace | 沒設定就不送 trace，不影響功能 |
 
 `.env` 已被 `.gitignore` 與 `.dockerignore` 排除，不會進 git 或 image。
@@ -77,7 +79,9 @@ pip install -r requirements.txt
 # 2. 設定金鑰
 cp .env.example .env      # 然後編輯 .env 填入 CWA_API_KEY 等
 
-# 3. 建立資料（Data/ 裡的資料庫與索引不在版控裡，必須自己產生；順序有依賴）
+# 3. 取得資料（Data/ 裡的資料庫與索引不在版控裡）。最快的方式：下載預先建好的資料包（約 90MB，已驗證校驗碼）
+python3 code/bootstrap_data.py
+#    或自己從來源重新建立（順序有依賴）：
 python3 collector/fetch_tourism.py              # 景點/住宿/餐飲 -> Data/travel.db（免key，每日更新）
 python3 collector/derive_district_coords.py     # 行政區中心點（依賴上一步的資料）
 python3 collector/build_embeddings.py           # 全量重建 Chroma + BM25 索引（會下載本地模型，需幾分鐘）
@@ -97,13 +101,13 @@ streamlit run code/app.py                       # 開 http://localhost:8501，�
 ## 測試
 
 ```bash
-(cd code && pytest -q)         # 43 個測試，全部 mock，不打真實 API、不需金鑰與 Data/
+(cd code && pytest -q)         # 全部 mock，不打真實 API、不需金鑰與 Data/
 python3 code/smoke_test_agent.py   # 真實 OpenAI + CWA（會花錢）：多輪對話、多需求、guardrail、天氣工具
 python3 code/smoke_test_rag.py     # 需要建好的 Data/（見上）
 python3 code/rag_quality/run_eval.py --eval-set eval_set_v2.json   # RAG 評估（ragas，會呼叫 OpenAI）
 ```
 
-CI 只跑 `pytest -q`（43 個）與 Docker image build；smoke test 與 RAG eval 需要真實金鑰或本機資料，不在 CI 裡。
+CI 只跑 `pytest -q` 與 Docker image build；smoke test 與 RAG eval 需要真實金鑰或本機資料，不在 CI 裡。
 
 ## Docker
 
@@ -114,6 +118,22 @@ docker compose pull             # 或拉 CD 推到 GHCR 的 image（ghcr.io/gary
 
 重點：image 裡**沒有** `Data/`；`docker-compose.yml` 會把主機的 `Data/chroma`、`Data/travel.db`、`Data/bm25_index.pkl` 掛進 container，所以**要先在主機完成上面第 3 步**。這三個路徑在主機上不存在時，Docker 會建出空目錄頂替，container 看起來正常、查詢卻查不到資料。在 Mac 用 colima 時，專案若放在外接磁碟，需 `colima start --mount /Volumes/<磁碟名>:w`。
 
+## 部署到 Streamlit Community Cloud
+
+app 啟動時若找不到 `Data/`，會自動從本 repo 的 Release 下載資料包，所以不需要把資料放進 repo。
+
+1. 到 [share.streamlit.io](https://share.streamlit.io) 用 GitHub 登入，選 **Create app**，指定本 repo、分支 `master`、主檔案 `code/app.py`。
+2. **Advanced settings**：Python 版本選 **3.11**；在 **Secrets** 填入
+
+   ```toml
+   CWA_API_KEY = "你的中央氣象署金鑰"
+   WEATHERLLM_RERANK = "0"
+   ```
+
+3. 部署後，使用者在側邊欄貼上自己的 OpenAI API Key 就能對話（金鑰只存在該使用者的工作階段）。
+
+免費方案的記憶體上限約 2.7GB（[官方說明](https://docs.streamlit.io/streamlit-community-cloud/manage-your-app)，可能隨時變動），完整模式約 3.7GB 放不下，所以雲端要設 `WEATHERLLM_RERANK = "0"`（輕量模式實測約 0.8GB）。輕量模式直接取混合檢索（BM25 + 向量）的前 5 筆，不再用重排序模型精選，排序品質略低。
+
 ## 授權
 
-程式碼以 [MIT License](LICENSE) 授權。旅遊與交通**資料**（觀光署、TDX）不隨 repo 散布，由使用者自行用 collector 取得，各自的授權與顯名要求見 [`DATA_LICENSE.md`](DATA_LICENSE.md)。
+程式碼以 [MIT License](LICENSE) 授權。旅遊與交通**資料**（觀光署、TDX）不放在 git 原始碼裡，可由 Release 的資料包取得或自行用 collector 建立，各自的授權與顯名要求見 [`DATA_LICENSE.md`](DATA_LICENSE.md)。
