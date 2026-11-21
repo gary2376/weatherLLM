@@ -102,3 +102,26 @@ def test_cancellation_during_weather_startup_is_not_swallowed(monkeypatch, captu
     agent._weather = FakeWeather(fail=asyncio.CancelledError())
     with pytest.raises(asyncio.CancelledError):
         _enter(agent)
+
+
+def test_resolve_cwa_key_priority_and_whitespace(monkeypatch):
+    monkeypatch.setattr(agent_module, "load_dotenv", lambda *a, **k: None)
+    monkeypatch.setenv("CWA_API_KEY", "  CWA-operator  ")
+    assert agent_module.resolve_cwa_key("  CWA-user ") == ("user", "CWA-user")
+    assert agent_module.resolve_cwa_key("   ") == ("operator", "CWA-operator")
+    monkeypatch.setenv("CWA_API_KEY", "   ")  # 只有空白視為沒有金鑰，UI與agent一致
+    assert agent_module.resolve_cwa_key(None) == ("none", "")
+    monkeypatch.delenv("CWA_API_KEY", raising=False)
+    assert agent_module.resolve_cwa_key("") == ("none", "")
+
+
+def test_mcp_server_returning_zero_tools_degrades_with_note(monkeypatch, captured):
+    monkeypatch.setenv("CWA_API_KEY", "CWA-operator")
+    agent = WeatherAgent(openai_api_key="sk-test")
+    agent._weather = FakeWeather(tools=[])
+    _enter(agent)
+    assert agent.weather_enabled is False
+    assert captured["tools"] == [search_travel_info.name]
+    assert captured["prompt"].endswith(WEATHER_UNAVAILABLE_NOTE)
+    asyncio.run(agent.__aexit__(None, None, None))
+    assert agent._weather.closed

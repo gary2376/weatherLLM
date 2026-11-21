@@ -4,16 +4,16 @@
 
 - **旅遊資料**：觀光署景點／住宿／餐飲開放資料，存進 SQLite，再建 Chroma 向量索引與 BM25 索引，用 Hybrid Search + Reranker 檢索。
 - **天氣資料**：透過 `cwa-mcp-server`（中央氣象署開放資料的 MCP 工具，PyPI 套件）即時查詢。
-- **Agent**：LangGraph `create_react_agent`，單一 agent、5 個工具（1 個 RAG + 4 個天氣）。
+- **Agent**：LangGraph `create_react_agent`，單一 agent，最多 5 個工具（1 個 RAG + 4 個天氣；天氣為選用，沒有金鑰時只剩 RAG）。
 - **介面**：Streamlit，對話與地圖並排。
 - **工程化**：Docker 單一 container、GitHub Actions CI（pytest + image build）與 CD（pytest 通過後推到 GHCR）。
-- **使用方式**：在自己的電腦用 Python 或 Docker 執行；本專案不提供線上服務。
+- **使用方式**：可直接使用下方的線上試用站，或在自己的電腦用 Python 或 Docker 執行。
 
 ## 線上試用
 
 **[weatherllm-hpes8wsx4xalrwfvawbzgq.streamlit.app](https://weatherllm-hpes8wsx4xalrwfvawbzgq.streamlit.app/)**（Streamlit Community Cloud，免費方案閒置會休眠，第一次開啟可能要等一下）。
 
-- 對話需要在側邊欄填入**你自己的 OpenAI API Key**（只保存在你的瀏覽器工作階段）。
+- 對話需要在側邊欄填入**你自己的 OpenAI API Key**（只保存在你目前的工作階段記憶體，不寫入磁碟）。
 - 想查**即時天氣**，可在側邊欄選填**氣象署 API 金鑰**（到[氣象資料開放平臺](https://opendata.cwa.gov.tw/)免費註冊取得）；有填就優先使用你的金鑰，沒填且展示站沒有預設金鑰時，只能詢問景點、住宿與餐廳。
 
 ## 畫面預覽

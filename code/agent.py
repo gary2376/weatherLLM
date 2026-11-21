@@ -145,6 +145,19 @@ def _build_langfuse_handler():
         return None
 
 
+def resolve_cwa_key(user_key: Optional[str] = None) -> tuple[str, str]:
+    """回傳(來源, 金鑰)：使用者金鑰優先 -> 操作者環境變數 -> 都沒有。
+    UI與agent共用這個函式，顯示的來源才會跟實際使用的一致。"""
+    load_dotenv()
+    user = (user_key or "").strip()
+    operator = (os.getenv("CWA_API_KEY") or "").strip()
+    if user:
+        return "user", user
+    if operator:
+        return "operator", operator
+    return "none", ""
+
+
 # 沒有可用的天氣工具時附加在system prompt後面：誠實告知，不要編造天氣。
 WEATHER_UNAVAILABLE_NOTE = """
 Weather tools are NOT available in this session. If the user asks about weather,
@@ -169,11 +182,7 @@ class WeatherAgent:
         checkpointer=None,
         cwa_api_key: Optional[str] = None,
     ):
-        load_dotenv()
-        user_key = (cwa_api_key or "").strip()
-        operator_key = (os.getenv("CWA_API_KEY") or "").strip()
-        self.cwa_key_source = "user" if user_key else ("operator" if operator_key else "none")
-        key = user_key or operator_key
+        self.cwa_key_source, key = resolve_cwa_key(cwa_api_key)
         self._weather = WeatherMCPTools(key) if key else None
         self.weather_enabled = False
         self._graph = None

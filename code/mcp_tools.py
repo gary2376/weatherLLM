@@ -11,6 +11,7 @@ MCP client框架，直接用`mcp` SDK本身寫stdio連線邏輯就好。
         tools = weather.tools  # List[StructuredTool]，掛進agent的工具清單
 """
 import asyncio
+import hashlib
 import json
 import sys
 import threading
@@ -36,17 +37,24 @@ WEATHER_CACHE_TTL_SECONDS = 45 * 60
 # LangGraph可能在同一輪併發呼叫多個工具。cache與in-flight表的每次讀寫都必須
 # 受同一把threading.Lock保護；in-flight Future也確保相同key同時miss時只有一個
 # coroutine真的呼叫MCP，其餘共用該次結果。Lock不能跨await持有，否則會卡住event loop。
-_weather_cache: Dict[tuple[str, str], tuple[str, float]] = {}
-_weather_cache_inflight: Dict[tuple[str, str], Future[str]] = {}
+_weather_cache: Dict[tuple[str, str, str], tuple[str, float]] = {}
+_weather_cache_inflight: Dict[tuple[str, str, str], Future[str]] = {}
 _weather_cache_lock = threading.Lock()
 
 _JSON_TYPE_MAP = {"string": str, "integer": int, "number": float, "boolean": bool}
 
 
-def _weather_cache_key(tool_name: str, kwargs: Dict[str, Any]) -> tuple[str, str]:
-    """MCP工具參數本來就必須是JSON可序列化值；排序後讓參數順序不影響key。"""
+def _credential_fingerprint(api_key: str) -> str:
+    """不可逆的金鑰指紋，只拿來區分快取，不會還原出金鑰。"""
+    return hashlib.sha256((api_key or "").encode("utf-8")).hexdigest()[:16]
+
+
+def _weather_cache_key(tool_name: str, kwargs: Dict[str, Any], credential: str = "") -> tuple[str, str, str]:
+    """MCP工具參數本來就必須是JSON可序列化值；排序後讓參數順序不影響key。
+    key也含金鑰指紋：不同金鑰各有各的快取，所以填了無效金鑰的使用者，不會拿到
+    別人(例如展示站預設金鑰)先前查到的成功結果而繞過自己金鑰的驗證。"""
     serialized_args = json.dumps(kwargs, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return tool_name, serialized_args
+    return tool_name, serialized_args, credential
 
 
 def _schema_to_pydantic(tool_name: str, schema: Optional[Dict[str, Any]]):
@@ -70,6 +78,7 @@ class WeatherMCPTools:
 
     def __init__(self, cwa_api_key: str):
         self._cwa_api_key = cwa_api_key
+        self._credential = _credential_fingerprint(cwa_api_key)
         self._stack = AsyncExitStack()
         self._session: Optional[ClientSession] = None
         self.tools: List[StructuredTool] = []
@@ -104,7 +113,7 @@ class WeatherMCPTools:
 
         async def _acall(**kwargs) -> str:
             assert self._session is not None, "WeatherMCPTools必須用`async with`進入才能呼叫工具"
-            cache_key = _weather_cache_key(name, kwargs)
+            cache_key = _weather_cache_key(name, kwargs, self._credential)
             now = time.monotonic()
 
             with _weather_cache_lock:

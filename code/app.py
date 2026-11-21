@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from collector.db import DB_PATH  # noqa: E402
 
-from agent import WeatherAgent  # noqa: E402
+from agent import WeatherAgent, resolve_cwa_key  # noqa: E402
 from bootstrap_data import BootstrapDataError, ensure_data_present  # noqa: E402
 
 
@@ -416,7 +416,7 @@ CHAT_PANEL_HEIGHT = 560
 
 def render_chat_tab(api_key: str, key_is_valid: bool) -> None:
     st.subheader("旅遊與天氣對話")
-    st.caption("可詢問台灣景點、住宿、餐廳與即時天氣資訊。對話只保留在目前瀏覽器工作階段。")
+    st.caption("可詢問台灣景點、住宿、餐廳與即時天氣資訊。對話只保留在目前工作階段，不寫入磁碟。")
 
     # 使用者要求「像聊天室一樣」——訊息區固定高度、內部自己捲動，輸入框釘在
     # 固定位置，不要讓整頁隨對話筆數無限往下延伸(不然地圖欄位會被拋在後面，
@@ -682,7 +682,7 @@ def main() -> None:
         "OpenAI API Key",
         type="password",
         key="openai_api_key",
-        help="只保存在目前瀏覽器工作階段，不會寫入磁碟或傳送到 Langfuse。",
+        help="只保存在目前工作階段的伺服器記憶體，不會寫入磁碟或傳送到 Langfuse；呼叫 OpenAI 時會用到。",
     )
     key_is_valid = bool(api_key) and api_key.startswith("sk-")
     if not api_key:
@@ -697,14 +697,15 @@ def main() -> None:
         help=(
             "只有要查即時天氣時才需要。到中央氣象署「氣象資料開放平臺」"
             "(opendata.cwa.gov.tw) 免費註冊就能取得授權碼。"
-            "只保存在目前瀏覽器工作階段；有填就優先使用你的金鑰。"
+            "只保存在目前工作階段的伺服器記憶體，不寫入磁碟；有填就優先使用你的金鑰。"
         ),
     ).strip()
-    if cwa_key:
+    cwa_source, _ = resolve_cwa_key(cwa_key)
+    if cwa_source == "user":
         st.sidebar.caption("天氣查詢：使用你填寫的金鑰。")
         if not cwa_key.startswith("CWA-"):
             st.sidebar.warning("氣象署金鑰通常以 CWA- 開頭，請確認是否貼對。")
-    elif os.getenv("CWA_API_KEY"):
+    elif cwa_source == "operator":
         st.sidebar.caption("天氣查詢：使用展示站的預設金鑰；想用自己的額度可在上方填入。")
     else:
         st.sidebar.caption(

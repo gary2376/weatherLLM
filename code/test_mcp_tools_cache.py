@@ -109,7 +109,9 @@ def test_expired_key_refetches():
         tool = _make_tool(session)
         first = await tool.ainvoke({"county": "臺北市"})
 
-        key = mcp_tools._weather_cache_key("get_weather_forecast", {"county": "臺北市"})
+        key = mcp_tools._weather_cache_key(
+            "get_weather_forecast", {"county": "臺北市"}, mcp_tools._credential_fingerprint("test-key")
+        )
         with mcp_tools._weather_cache_lock:
             value, _ = mcp_tools._weather_cache[key]
             mcp_tools._weather_cache[key] = (
@@ -216,3 +218,37 @@ if __name__ == "__main__":
     test_concurrent_same_key_failure_reaches_every_waiter_without_hanging()
     test_mcp_error_result_is_not_cached_or_returned_as_weather_data()
     print("PASS: weather MCP TTL cache checks all passed")
+
+
+def _tool_for_key(session, api_key):
+    weather = mcp_tools.WeatherMCPTools(api_key)
+    weather._session = session
+    return weather._build_tool(
+        "get_weather_forecast",
+        "test tool",
+        {"type": "object", "properties": {"county": {"type": "string"}}, "required": ["county"]},
+    )
+
+
+def test_cache_is_isolated_per_api_key():
+    """別人的成功結果不能讓另一把金鑰(例如無效金鑰)跳過自己的驗證。"""
+    with mcp_tools._weather_cache_lock:
+        mcp_tools._weather_cache.clear()
+    first, second = CountingSession(), ErrorResultSession()
+    operator_tool = _tool_for_key(first, "CWA-operator")
+    visitor_tool = _tool_for_key(second, "CWA-bad-key")
+    assert "response-1" in asyncio.run(operator_tool.ainvoke({"county": "臺北市"}))
+    with pytest.raises(Exception):  # 無效金鑰自己打API並得到錯誤，而不是命中operator的快取
+        asyncio.run(visitor_tool.ainvoke({"county": "臺北市"}))
+    assert second.call_count == 1
+    assert not any("CWA-operator" in str(k) or "CWA-bad-key" in str(k) for k in mcp_tools._weather_cache)
+
+
+def test_same_api_key_still_shares_cache():
+    with mcp_tools._weather_cache_lock:
+        mcp_tools._weather_cache.clear()
+    session = CountingSession()
+    one, two = _tool_for_key(session, "CWA-same"), _tool_for_key(session, "CWA-same")
+    asyncio.run(one.ainvoke({"county": "臺北市"}))
+    asyncio.run(two.ainvoke({"county": "臺北市"}))
+    assert session.call_count == 1
